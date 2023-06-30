@@ -1,0 +1,49 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Encryption\Data\Generated_Dao\**" />
+    <Compile Remove="Encryption\Encryption_Generated\**" />
+    <Compile Remove="Encryption\Partials\**" />
+    <EmbeddedResource Remove="Encryption\Data\Generated_Dao\**" />
+    <EmbeddedResource Remove="Encryption\Encryption_Generated\**" />
+    <EmbeddedResource Remove="Encryption\Partials\**" />
+    <None Remove="Encryption\Data\Generated_Dao\**" />
+    <None Remove="Encryption\Encryption_Generated\**" />
+    <None Remove="Encryption\Partials\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Encryption\CredentialManager.cs" />
+    <Compile Remove="Encryption\DecryptedVaultItem.cs" />
+    <Compile Remove="Encryption\ManagedVault.cs" />
+    <Compile Remove="Encryption\ManagedVaults.cs" />
+    <Compile Remove="Encryption\VaultCredentialProvider.cs" />
+    <Compile Remove="Encryption\VaultDatabase.cs" />
+    <Compile Remove="Encryption\VaultDatabaseInitializer.cs" />
+    <Compile Remove="Encryption\VaultInfo.cs" />
+    <Compile Remove="Encryption\VaultKeyInfo.cs" />
+    <Compile Remove="Encryption\VaultKeyNotSetException.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Encryption\regen_db_js.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Encryption\regen_db_js.sh" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\bam.framework\submodules\bam.base\bam.base\bam.base.csproj" />
+    <ProjectReference Include="..\..\..\bam.framework\submodules\bam.data.repositories\bam.data.repositories\bam.data.repositories.csproj" />
+    <ProjectReference Include="..\..\..\bam.framework\submodules\bam.data\bam.data\bam.data.csproj" />
+    <ProjectReference Include="..\..\..\bam.framework\submodules\bam.storage\bam.storage\bam.storage.csproj" />
+  </ItemGroup>
+
+</Project>
