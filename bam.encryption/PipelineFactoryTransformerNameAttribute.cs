@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net
+namespace Bam
 {
     [AttributeUsage(AttributeTargets.Class)]
     public class PipelineFactoryTransformerNameAttribute : Attribute

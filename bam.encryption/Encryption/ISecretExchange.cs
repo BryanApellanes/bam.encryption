@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// Provides a way for a server to securely share a secret with a client.

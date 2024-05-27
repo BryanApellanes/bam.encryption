@@ -1,7 +1,7 @@
-﻿using Bam.Net.Data;
-using Bam.Net.Encryption.Data;
+﻿using Bam.Data;
+using Bam.Encryption.Data;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class EncryptionDataRepository
     {

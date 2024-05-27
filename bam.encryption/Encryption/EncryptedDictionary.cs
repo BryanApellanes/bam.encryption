@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class EncryptedDictionary : IEncryptedDictionary
     {

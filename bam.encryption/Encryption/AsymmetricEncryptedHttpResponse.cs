@@ -1,9 +1,9 @@
-﻿using Bam.Net.Server;
+﻿using Bam.Server;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class AsymmetricEncryptedHttpResponse<T> : EncryptedHttpResponse
     {

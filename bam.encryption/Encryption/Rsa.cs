@@ -10,7 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public static class Rsa
     {

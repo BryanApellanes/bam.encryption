@@ -1,13 +1,13 @@
-﻿using Bam.Net.Data;
-using Bam.Net.Encryption.Data;
-//using Bam.Net.Encryption.Data.Dao.Repository;
-using Bam.Net.Services;
+﻿using Bam.Data;
+using Bam.Encryption.Data;
+//using Bam.Encryption.Data.Dao.Repository;
+using Bam.Services;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class ClientKeySetDataManager : IClientKeySetDataManager
     {

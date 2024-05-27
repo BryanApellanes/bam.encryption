@@ -1,11 +1,11 @@
-﻿using Bam.Net.Encryption;
-using Bam.Net.ServiceProxy.Encryption;
-using Bam.NET.Encryption;
+﻿using Bam.Encryption;
+using Bam.ServiceProxy.Encryption;
+using Bam.Encryption;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Server
+namespace Bam.Server
 {
     public abstract class EncryptedHttpResponse : HttpResponse
     {

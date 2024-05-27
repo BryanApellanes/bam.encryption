@@ -1,11 +1,11 @@
-﻿using Bam.Net.CoreServices;
+﻿using Bam.CoreServices;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 
-namespace Bam.Net
+namespace Bam
 {
     public class ValueTransformerPipelineFactory
     {

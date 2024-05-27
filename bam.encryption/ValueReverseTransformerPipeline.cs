@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Text;
 
-namespace Bam.Net
+namespace Bam
 {
     public class ValueReverseTransformerPipeline<TData> : IValueReverseTransformer<byte[], TData>
     {

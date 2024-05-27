@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// A specialized data encryptor that produces content ciphers.

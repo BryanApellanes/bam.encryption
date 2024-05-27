@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace Bam.Net.Encryption.Data.Files
+namespace Bam.Encryption.Data.Files
 {
     public class KeySetFile : KeySet, IApplicationKeySet
     {

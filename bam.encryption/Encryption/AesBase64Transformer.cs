@@ -1,9 +1,9 @@
-﻿using Bam.Net.ServiceProxy.Encryption;
+﻿using Bam.ServiceProxy.Encryption;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class AesBase64Transformer : ValueTransformer<string, string>
     {

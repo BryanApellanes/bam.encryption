@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Org.BouncyCastle.Security;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public static class Secure
     {

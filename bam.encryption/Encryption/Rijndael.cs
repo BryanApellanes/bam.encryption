@@ -10,7 +10,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.IO;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// This class was taken verbatim from the highest ranked answer from 

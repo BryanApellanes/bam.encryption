@@ -1,4 +1,4 @@
-﻿namespace Bam.Net.Encryption
+﻿namespace Bam.Encryption
 {
     public interface IHttpRequestHeaderEncryptor
     {

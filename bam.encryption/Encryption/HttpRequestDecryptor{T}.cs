@@ -1,9 +1,9 @@
-﻿using Bam.net.shared.Encryption;
+﻿using Bam.shared.Encryption;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class HttpRequestDecryptor<TContent> : HttpRequestDecryptor, IHttpRequestDecryptor<TContent>
     {

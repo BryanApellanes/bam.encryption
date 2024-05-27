@@ -10,7 +10,7 @@ using System.IO;
 using System.Security.Cryptography;
 using Org.BouncyCastle.Security;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class Decrypted: Encrypted
     {

@@ -1,9 +1,9 @@
-﻿//using Bam.net;
+﻿//using Bam;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net
+namespace Bam
 {
     public abstract class ValueTransformer<TInput, TOutput> : IValueTransformer<TInput, TOutput>, IValueConverter<TOutput>
     {

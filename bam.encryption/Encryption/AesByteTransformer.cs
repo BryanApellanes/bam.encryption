@@ -1,11 +1,11 @@
-﻿//using Bam.Net.ServiceProxy.Data.Dao.Repository;
-using Bam.Net.ServiceProxy.Encryption;
-using Bam.Net.Services;
+﻿//using Bam.ServiceProxy.Data.Dao.Repository;
+using Bam.ServiceProxy.Encryption;
+using Bam.Services;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     [PipelineFactoryTransformerName("aes")]
     public class AesByteTransformer : ValueTransformer<byte[], byte[]>

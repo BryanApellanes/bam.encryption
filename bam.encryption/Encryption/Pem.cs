@@ -16,7 +16,7 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Math;
 using System.IO;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public static class Pem
     {

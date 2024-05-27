@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// An Aes key, iv and asymmetric key pem string.

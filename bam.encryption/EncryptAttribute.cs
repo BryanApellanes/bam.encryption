@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// Denotes a class that requires encryption when streamed to file

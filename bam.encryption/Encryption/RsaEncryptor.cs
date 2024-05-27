@@ -1,9 +1,9 @@
-﻿using Bam.Net.Encryption;
+﻿using Bam.Encryption;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class RsaEncryptor : IEncryptor
     {

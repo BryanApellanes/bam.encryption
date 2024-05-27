@@ -1,10 +1,10 @@
-﻿//using Bam.Net.Encryption.Data.Dao.Repository;
+﻿//using Bam.Encryption.Data.Dao.Repository;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public interface IServerKeySetDataManager
     {

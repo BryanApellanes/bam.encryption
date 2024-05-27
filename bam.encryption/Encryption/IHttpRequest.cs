@@ -1,10 +1,10 @@
-﻿using Bam.Net.Web;
+﻿using Bam.Web;
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public interface IHttpRequest
     {

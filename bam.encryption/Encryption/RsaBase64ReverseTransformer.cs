@@ -1,13 +1,13 @@
-﻿using Bam.Net.ServiceProxy;
-//using Bam.Net.ServiceProxy.Data;
-using Bam.Net.ServiceProxy.Encryption;
-using Bam.Net.Services;
+﻿using Bam.ServiceProxy;
+//using Bam.ServiceProxy.Data;
+using Bam.ServiceProxy.Encryption;
+using Bam.Services;
 using Org.BouncyCastle.Crypto;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class RsaBase64ReverseTransformer : IValueReverseTransformer<string, string>, IRequiresHttpContext, ICloneable, IContextCloneable
     {

@@ -7,9 +7,9 @@ using System.Linq;
 using System.Text;
 using System.Security.Cryptography;
 using System.IO;
-using Bam.Net.Configuration;
+using Bam.Configuration;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     public class RsaKeyFile
     {

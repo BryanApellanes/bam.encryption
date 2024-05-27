@@ -10,7 +10,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.IO;
 
-namespace Bam.Net.Encryption
+namespace Bam.Encryption
 {
     /// <summary>
     /// Represents a class that encrypts data with a provided password.

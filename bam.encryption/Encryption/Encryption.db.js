@@ -1,5 +1,5 @@
 var database = {
-    nameSpace: "Bam.Net.Encryption",
+    nameSpace: "Bam.Encryption",
     schemaName: "Encryption",
     xrefs: [
         //["List", "Item"]

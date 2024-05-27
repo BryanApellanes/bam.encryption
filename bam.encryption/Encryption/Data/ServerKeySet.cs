@@ -1,10 +1,10 @@
-﻿using Bam.Net.Data.Repositories;
+﻿using Bam.Data.Repositories;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
 
-namespace Bam.Net.Encryption.Data
+namespace Bam.Encryption.Data
 {
     /// <summary>
     /// Represents a key set for the current process or host to use 

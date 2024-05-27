@@ -1,12 +1,12 @@
-﻿using Bam.Net.Data.Repositories;
-using Bam.Net.Encryption.Data.Files;
+﻿using Bam.Data.Repositories;
+using Bam.Encryption.Data.Files;
 using Org.BouncyCastle.Crypto;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace Bam.Net.Encryption.Data
+namespace Bam.Encryption.Data
 {
     public class KeySet : KeyedAuditRepoData, IKeySet, IAesKeySource
     {
