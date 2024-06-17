@@ -69,6 +69,11 @@ namespace Bam.Encryption
 
         public void Save(string filePath)
         {
+            FileInfo fileInfo = new FileInfo(filePath);
+            if (fileInfo.Directory != null && !fileInfo.Directory.Exists)
+            {
+                fileInfo.Directory.Create();
+            }
             string xml = ObjectExtensions.ToXml(this);
             byte[] xmlBytes = Encoding.UTF8.GetBytes(xml);
             string xmlBase64 = Convert.ToBase64String(xmlBytes);
