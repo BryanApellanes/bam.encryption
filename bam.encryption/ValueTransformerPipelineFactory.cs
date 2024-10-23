@@ -49,11 +49,11 @@ namespace Bam
                 .ToList();
 
             Dictionary<string, ConstructorInfo> namedTransformerTypes = new Dictionary<string, ConstructorInfo>();
-            HashSet<string> selectedTransformerNames = new HashSet<string>(transformerNames);
+            //HashSet<string> selectedTransformerNames = new HashSet<string>(transformerNames);
             foreach(Type type in transformerTypes)
             {
                 PipelineFactoryTransformerNameAttribute nameAttribute = type.GetCustomAttributeOfType<PipelineFactoryTransformerNameAttribute>();
-                ConstructorInfo ctor = type.GetConstructors().FirstOrDefault(c => c.HasCustomAttributeOfType<PipelineFactoryConstructorAttribute>());
+                ConstructorInfo? ctor = type.GetConstructors().FirstOrDefault(c => c.HasCustomAttributeOfType<PipelineFactoryConstructorAttribute>());
                 if (ctor == null)
                 {
                     ctor = type.GetConstructor(Type.EmptyTypes);

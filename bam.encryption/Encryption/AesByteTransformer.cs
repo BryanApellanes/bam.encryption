@@ -17,7 +17,7 @@ namespace Bam.Encryption
         }
 
         [PipelineFactoryConstructor]
-        public AesByteTransformer(IAesKeySource aesKeySource) : this(() => aesKeySource.GetAesKey())
+        public AesByteTransformer(IAesKeySource aesKeySource) : this(aesKeySource.GetAesKey)
         { 
         }
 
