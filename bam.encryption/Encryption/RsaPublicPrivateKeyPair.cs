@@ -66,7 +66,7 @@ namespace Bam.Encryption
         }
 
         /// <summary>
-        /// Deciphers the specifed base 64 encoded cipher text.
+        /// Deciphers the specified base 64 encoded cipher text.
         /// </summary>
         /// <param name="base64Cipher"></param>
         /// <param name="encoding"></param>

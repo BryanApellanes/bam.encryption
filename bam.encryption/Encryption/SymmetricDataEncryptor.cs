@@ -39,6 +39,11 @@ namespace Bam.Encryption
             return GetReverseTransformer();
         }
 
+        /// <summary>
+        /// Encrypt the specified string
+        /// </summary>
+        /// <param name="plainData">The data to encrypt.</param>
+        /// <returns>The base64 encoded cipher.</returns>
         public string EncryptString(string plainData)
         {
             byte[] utf8 = Encoding.UTF8.GetBytes(plainData);
@@ -47,6 +52,11 @@ namespace Bam.Encryption
             return cipherData.ToBase64();
         }
 
+        /// <summary>
+        /// Encrypt the specified data.
+        /// </summary>
+        /// <param name="plainData">The data to encrypt.</param>
+        /// <returns>The cipher.</returns>
         public byte[] EncryptBytes(byte[] plainData)
         {
             return AesByteTransformer.Transform(plainData);

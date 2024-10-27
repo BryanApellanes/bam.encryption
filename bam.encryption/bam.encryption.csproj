@@ -44,6 +44,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\bam.base\bam.base.transformers\bam.base.transformers.csproj" />
     <ProjectReference Include="..\..\bam.base\bam.base\bam.base.csproj" />
     <ProjectReference Include="..\..\bam.data.repositories\bam.data.repositories\bam.data.repositories.csproj" />
     <ProjectReference Include="..\..\bam.data\bam.data\bam.data.csproj" />
