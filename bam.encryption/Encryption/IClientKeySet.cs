@@ -34,7 +34,7 @@ namespace Bam.Encryption
         string Decrypt(string base64EncodedValue);
 
         /// <summary>
-        /// Gets a value indicating whether the aes key and initializaiton vector are not blank.
+        /// Gets a value indicating whether the aes key and initialization vector are not blank.
         /// </summary>
         /// <returns></returns>
         bool GetIsInitialized();

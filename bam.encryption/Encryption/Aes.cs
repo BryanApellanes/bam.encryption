@@ -27,7 +27,7 @@ namespace Bam.Encryption
         public static string Encrypt(string value, string password)
         {
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
-            byte[] aesKey = SHA256Managed.Create().ComputeHash(passwordBytes);
+            byte[] aesKey = SHA256.Create().ComputeHash(passwordBytes);
             byte[] aesIV = MD5.Create().ComputeHash(passwordBytes);
 
             return Encrypt(value, aesKey.ToBase64(), aesIV.ToBase64());
@@ -36,7 +36,7 @@ namespace Bam.Encryption
         public static string Decrypt(string value, string password)
         {
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
-            byte[] aesKey = SHA256Managed.Create().ComputeHash(passwordBytes);
+            byte[] aesKey = SHA256.Create().ComputeHash(passwordBytes);
             byte[] aesIV = MD5.Create().ComputeHash(passwordBytes);
 
             return Decrypt(value, aesKey.ToBase64(), aesIV.ToBase64());   
@@ -63,13 +63,11 @@ namespace Bam.Encryption
         /// <returns>Base64 encoded encrypted value</returns>
         public static string Encrypt(string plainText, string base64EncodedKey, string base64EncodedIV)
         {
-            AesManaged aes = new AesManaged
-            {
-                IV = Convert.FromBase64String(base64EncodedIV),
-                Key = Convert.FromBase64String(base64EncodedKey),
-                Padding = PaddingMode.PKCS7
-            };
-
+            System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
+            aes.IV = Convert.FromBase64String(base64EncodedIV);
+            aes.Key = Convert.FromBase64String(base64EncodedKey);
+            aes.Padding = PaddingMode.PKCS7;
+                
             ICryptoTransform encryptor = aes.CreateEncryptor();
 
             byte[] encryptedBytes = Encrypt(plainText, encryptor);
@@ -92,13 +90,11 @@ namespace Bam.Encryption
 
         public static byte[] EncryptBytes(byte[] plainData, string base64EncodedKey, string base64EncodedIV)
         {
-            AesManaged aes = new AesManaged
-            {
-                IV = Convert.FromBase64String(base64EncodedIV),
-                Key = Convert.FromBase64String(base64EncodedKey),
-                Padding = PaddingMode.PKCS7
-            };
-
+            System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
+            aes.IV = Convert.FromBase64String(base64EncodedIV);
+            aes.Key = Convert.FromBase64String(base64EncodedKey);
+            aes.Padding = PaddingMode.PKCS7;
+            
             ICryptoTransform encryptor = aes.CreateEncryptor();
 
             return EncryptBytes(plainData, encryptor);            
@@ -152,16 +148,13 @@ namespace Bam.Encryption
             return (encoding ?? Encoding.UTF8).GetString(retBytes.ToArray());
         }
 
-        public static byte[] DecryptBytes(byte[] cipherText, string base64EncodedKey, string base64EncodedIV)
+        public static byte[] DecryptBytes(byte[] cipherText, string base64EncodedKey, string base64EncodedIv)
         {
-            AesManaged aes = new AesManaged
-            {
-                IV = Convert.FromBase64String(base64EncodedIV),
-                Key = Convert.FromBase64String(base64EncodedKey),
-                Padding = PaddingMode.PKCS7
-            };
-
-            //ICryptoTransform decryptor = aes.CreateDecryptor();
+            System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
+            aes.IV = Convert.FromBase64String(base64EncodedIv);
+            aes.Key = Convert.FromBase64String(base64EncodedKey);
+            aes.Padding = PaddingMode.PKCS7;
+            
             byte[] plainText = null;
             using (MemoryStream ms = new MemoryStream())
             {
@@ -174,37 +167,6 @@ namespace Bam.Encryption
             }
 
             return plainText;
-            /**
-            using (MemoryStream decryptBuffer = new MemoryStream(encData))
-            {
-                using (CryptoStream decryptStream = new CryptoStream(decryptBuffer, decryptor, CryptoStreamMode.Read))
-                {
-                    byte[] decrypted = new byte[encData.Length];
-
-                    int totalBytesRead = 0;
-                    int bytesRead = 0;
-                    do
-                    {
-                        bytesRead = decryptStream.Read(decrypted, totalBytesRead, 1);
-                        totalBytesRead += bytesRead;
-                    } while (bytesRead > 0);
-
-                    // This seems like a cheesy way to remove trailing 0 bytes
-                    // but unless I know the expected length of the decrypted data
-                    // I can't think of another way to do this effectively
-                    List<byte> retBytes = new List<byte>();
-                    foreach (byte b in decrypted)
-                    {
-                        if (b == 0)
-                            break;
-
-                        retBytes.Add(b);
-                    }
-
-                    return retBytes.ToArray();
-                }
-            }
-            **/
         }
 
         /// <summary>
@@ -242,7 +204,7 @@ namespace Bam.Encryption
 
             if (writeKeyFile)
             {
-                key.Save(keyFilePath);
+                key.SaveXmlBase64(keyFilePath);
             }
             return key;
         }
@@ -266,7 +228,7 @@ namespace Bam.Encryption
                 throw new FileNotFoundException(string.Format("The key file specified {0} does not exist", keyFile));
             }
 
-            AesKeyVectorPair key = AesKeyVectorPair.Load(keyFile); 
+            AesKeyVectorPair key = AesKeyVectorPair.LoadXmlBase64(keyFile); 
 
             return Decrypt<T>(filePath, key);
         }

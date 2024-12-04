@@ -11,6 +11,9 @@ using Bam.Configuration;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Represents a portable key and initialization vector for use in Aes encryption and decryption operations.
+    /// </summary>
     [Serializable]
     public class AesKeyVectorPair : IAesKeySource
     {
@@ -21,10 +24,10 @@ namespace Bam.Encryption
             SetKeyAndIv();
         }
 
-        public AesKeyVectorPair(string base64EncodedKey, string base64EncdoedIV)
+        public AesKeyVectorPair(string base64EncodedKey, string base64EncodedIv)
         {
             this.Key = base64EncodedKey;
-            this.IV = base64EncdoedIV;
+            this.IV = base64EncodedIv;
         }
 
         static readonly object _aesLock = new object();
@@ -44,12 +47,12 @@ namespace Bam.Encryption
                         string fileName = Path.Combine(BamHome.Local, SystemKeyFileName);
                         if (File.Exists(fileName))
                         {
-                            _key = Load(fileName);
+                            _key = LoadXmlBase64(fileName);
                         }
                         else
                         {
                             _key = new AesKeyVectorPair();
-                            _key.Save(fileName);
+                            _key.SaveXmlBase64(fileName);
                         }
                     }
                 }
@@ -60,37 +63,45 @@ namespace Bam.Encryption
 
         private void SetKeyAndIv()
         {
-            AesManaged aes = new AesManaged();
+            System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
             aes.GenerateKey();
             aes.GenerateIV();
             this.Key = Convert.ToBase64String(aes.Key);
             this.IV = Convert.ToBase64String(aes.IV);
         }
 
-        public void Save(string filePath)
+        public void SaveJson(string filePath)
+        {
+            this.ToJsonFile(new FileInfo(filePath));
+        }
+
+        public static AesKeyVectorPair LoadJson(string filePath)
+        {
+            return filePath.FromJsonFile<AesKeyVectorPair>();
+        }
+        
+        public void SaveXmlBase64(string filePath)
         {
             FileInfo fileInfo = new FileInfo(filePath);
             if (fileInfo.Directory != null && !fileInfo.Directory.Exists)
             {
                 fileInfo.Directory.Create();
             }
-            string xml = ObjectExtensions.ToXml(this);
+            string xml = this.ToXml();
             byte[] xmlBytes = Encoding.UTF8.GetBytes(xml);
             string xmlBase64 = Convert.ToBase64String(xmlBytes);
-            using (StreamWriter sw = new StreamWriter(filePath))
-            {
-                sw.Write(xmlBase64);
-            }
+            using StreamWriter sw = new StreamWriter(filePath);
+            sw.Write(xmlBase64);
         }
 
-        public static AesKeyVectorPair Load(string filePath)
+        public static AesKeyVectorPair LoadXmlBase64(string filePath)
         {
             using (StreamReader sr = new StreamReader(filePath))
             {
                 string xmlBase64 = sr.ReadToEnd();
                 byte[] xmlBytes = Convert.FromBase64String(xmlBase64);
                 string xml = Encoding.UTF8.GetString(xmlBytes);
-                return StringExtensions.FromXml<AesKeyVectorPair>(xml);
+                return xml.FromXml<AesKeyVectorPair>();
             }
         }
 
