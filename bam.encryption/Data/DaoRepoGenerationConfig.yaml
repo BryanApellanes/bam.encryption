@@ -2,5 +2,4 @@
 SchemaName: EncryptionData
 WriteSourceTo: ./Generated_Dao
 FromNameSpace: Bam.Encryption.Data
-ToNameSpace: Bam.Encryption.Data.Dao
 UseInheritanceSchema: true

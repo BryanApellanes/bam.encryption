@@ -79,6 +79,12 @@ namespace Bam.Encryption.Data
             return Aes.Decrypt(base64EncodedValue, GetAesKey());
         }
 
+        /// <summary>
+        /// Use public key to encrypt, same as PublicKeyEncrypt.
+        /// </summary>
+        /// <param name="plainText">The plain text.</param>
+        /// <param name="engine">The engine.</param>
+        /// <returns>cipher as string.</returns>
         public string AsymmetricEncrypt(string plainText, IAsymmetricBlockCipher engine = null)
         {
             return PublicKeyEncrypt(plainText, engine);
@@ -100,7 +106,7 @@ namespace Bam.Encryption.Data
         /// </summary>
         /// <param name="plainText">The plain text.</param>
         /// <param name="engine">The engine.</param>
-        /// <returns></returns>
+        /// <returns>cipher as string.</returns>
         public string PublicKeyEncrypt(string plainText, IAsymmetricBlockCipher engine = null)
         {
             AsymmetricKeyParameter key = GetAsymmetricKeys().Public;

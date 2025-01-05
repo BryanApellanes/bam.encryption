@@ -9,10 +9,10 @@ namespace Bam.Encryption
 {
     public static class Secure
     {
-        public static string RandomString()
+        public static string RandomString(int seedLength = 64)
         {
             SecureRandom random = new SecureRandom();
-            return random.GenerateSeed(64).ToBase64().Sha256();
+            return random.GenerateSeed(seedLength).ToBase64().Sha256();
         }
     }
 }
