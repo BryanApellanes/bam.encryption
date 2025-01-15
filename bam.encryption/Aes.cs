@@ -51,7 +51,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static string Encrypt(string value, AesKeyVectorPair key)
         {
-            return Encrypt(value, key.Key, key.IV);
+            return Encrypt(value, key.Key, key.Iv);
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static string Decrypt(string base64EncodedValue, AesKeyVectorPair key)
         {
-            return Decrypt(base64EncodedValue, key.Key, key.IV);
+            return Decrypt(base64EncodedValue, key.Key, key.Iv);
         }
 
         /// <summary>
@@ -258,7 +258,7 @@ namespace Bam.Encryption
             key = new AesKeyVectorPair
             {
                 Key = Convert.ToBase64String(rm.Key),
-                IV = Convert.ToBase64String(rm.IV)
+                Iv = Convert.ToBase64String(rm.IV)
             };
             byte[] encryptedBytes = Encrypt(xml, rm.CreateEncryptor());
             return Convert.ToBase64String(encryptedBytes);
@@ -273,7 +273,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static T Deserialize<T>(string base64EncryptedXmlString, AesKeyVectorPair key)
         {
-            string xml = Decrypt(base64EncryptedXmlString, key.Key, key.IV);
+            string xml = Decrypt(base64EncryptedXmlString, key.Key, key.Iv);
             return StringExtensions.FromXml<T>(xml);
         }
     }

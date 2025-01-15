@@ -27,7 +27,7 @@ namespace Bam.Encryption
         public AesKeyVectorPair(string base64EncodedKey, string base64EncodedIv)
         {
             this.Key = base64EncodedKey;
-            this.IV = base64EncodedIv;
+            this.Iv = base64EncodedIv;
         }
 
         static readonly object _aesLock = new object();
@@ -67,7 +67,7 @@ namespace Bam.Encryption
             aes.GenerateKey();
             aes.GenerateIV();
             this.Key = Convert.ToBase64String(aes.Key);
-            this.IV = Convert.ToBase64String(aes.IV);
+            this.Iv = Convert.ToBase64String(aes.IV);
         }
 
         public void SaveJson(string filePath)
@@ -119,7 +119,7 @@ namespace Bam.Encryption
         /// <value>
         /// The iv.
         /// </value>
-        public string IV { get; set; }
+        public string Iv { get; set; }
 
         /// <summary>
         /// Gets a Base64 encoded value representing the cypher of the specified
@@ -142,12 +142,12 @@ namespace Bam.Encryption
 
         public byte[] EncryptBytes(byte[] data)
         {
-            return Aes.EncryptBytes(data, this.Key, this.IV);
+            return Aes.EncryptBytes(data, this.Key, this.Iv);
         }
 
         public byte[] DecryptBytes(byte[] cipherData)
         {
-            return Aes.DecryptBytes(cipherData, this.Key, this.IV);
+            return Aes.DecryptBytes(cipherData, this.Key, this.Iv);
         }
 
         public AesKeyVectorPair GetAesKey()

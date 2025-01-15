@@ -112,7 +112,7 @@ namespace Bam.Encryption.Data
         {
             AesKeyVectorPair aesKeyVectorPair = new AesKeyVectorPair();
             AesKey = aesKeyVectorPair.Key;
-            AesIV = aesKeyVectorPair.IV;
+            AesIV = aesKeyVectorPair.Iv;
         }
 
         protected void SetIdentifier()

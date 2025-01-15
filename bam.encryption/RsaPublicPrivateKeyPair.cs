@@ -23,22 +23,11 @@ namespace Bam.Encryption
             this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
         }
 
-        AsymmetricCipherKeyPair _asymmetricCipherKeyPair;
+        AsymmetricCipherKeyPair? _asymmetricCipherKeyPair;
         protected AsymmetricCipherKeyPair AsymmetricCipherKeyPair
         {
-            get
-            {
-                if(_asymmetricCipherKeyPair == null)
-                {
-                    _asymmetricCipherKeyPair = Pem.ToKeyPair();
-                }
-
-                return _asymmetricCipherKeyPair;
-            }
-            set
-            {
-                _asymmetricCipherKeyPair = value;
-            }
+            get => _asymmetricCipherKeyPair ??= Pem.ToKeyPair();
+            set => _asymmetricCipherKeyPair = value;
         }
 
         public RsaKeyLength RsaKeyLength { get; set; }
@@ -57,8 +46,9 @@ namespace Bam.Encryption
         /// Gets a base 64 encoded cipher for the specified plain text.
         /// </summary>
         /// <param name="plainText"></param>
+        /// <param name="encoding"></param>
         /// <returns></returns>
-        public string Encrypt(string plainText, Encoding encoding = null)
+        public string Encrypt(string plainText, Encoding? encoding = null)
         {
             byte[] plainData = (encoding ?? Encoding.UTF8).GetBytes(plainText);
             byte[] encrypted = EncryptBytes(plainData);
@@ -71,7 +61,7 @@ namespace Bam.Encryption
         /// <param name="base64Cipher"></param>
         /// <param name="encoding"></param>
         /// <returns></returns>
-        public string Decrypt(string base64Cipher, Encoding encoding = null)
+        public string Decrypt(string base64Cipher, Encoding? encoding = null)
         {
             byte[] cipherBytes = base64Cipher.FromBase64();
             byte[] decrypted = DecryptBytes(cipherBytes);

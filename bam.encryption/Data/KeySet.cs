@@ -57,10 +57,7 @@ namespace Bam.Encryption.Data
                 }
                 return _secret;
             }
-            set
-            {
-                _secret = value;
-            }
+            set => _secret = value;
         }
 
         public string GetSecret()
@@ -119,12 +116,12 @@ namespace Bam.Encryption.Data
             return cipher.DecryptWithPrivateKey(RsaKey.ToKeyPair().Private, null, engine);
         }
 
-        AesKeyVectorPair _aesKeyVectorPair;
+        AesKeyVectorPair? _aesKeyVectorPair;
         public AesKeyVectorPair GetAesKey()
         {
             if (_aesKeyVectorPair == null)
             {
-                _aesKeyVectorPair = new AesKeyVectorPair { Key = AesKey, IV = AesIV };
+                _aesKeyVectorPair = new AesKeyVectorPair { Key = AesKey, Iv = AesIV };
             }
 
             return _aesKeyVectorPair;
@@ -161,7 +158,7 @@ namespace Bam.Encryption.Data
             {
                 AesKeyVectorPair akvp = new AesKeyVectorPair();
                 AesKey = akvp.Key;
-                AesIV = akvp.IV;
+                AesIV = akvp.Iv;
             }
         }
 

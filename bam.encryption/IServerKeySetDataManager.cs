@@ -20,7 +20,7 @@ namespace Bam.Encryption
 
         /// <summary>
         /// Creates a server key set for the current process to act as a server
-        /// to the the specified client and whose rsa key is initialized but aes key 
+        /// to the specified client and whose rsa key is initialized but aes key 
         /// and initialization vector are not.
         /// </summary>
         /// <param name="clientHostName"></param>
