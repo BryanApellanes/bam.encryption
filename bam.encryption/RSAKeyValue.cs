@@ -16,9 +16,6 @@
 // 
 namespace Bam.Encryption
 {
-    using System.Xml.Serialization;
-
-
     /// <remarks/>
     [System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "4.0.30319.33440")]
     [System.SerializableAttribute()]

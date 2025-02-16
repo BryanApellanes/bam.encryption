@@ -1,9 +1,4 @@
 ﻿//using Bam.ServiceProxy.Data.Dao.Repository;
-using Bam.ServiceProxy.Encryption;
-using Bam.Services;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Bam.Encryption
 {

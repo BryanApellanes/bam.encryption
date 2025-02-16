@@ -1,9 +1,4 @@
-﻿using Org.BouncyCastle.Crypto;
-using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Bam.Encryption
+﻿namespace Bam.Encryption
 {
     public class AesKeyExchange : IAesKeyExchange
     {

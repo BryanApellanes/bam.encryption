@@ -1,9 +1,4 @@
-﻿using Bam.ServiceProxy.Encryption;
-using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Bam.Encryption
+﻿namespace Bam.Encryption
 {
     [PipelineFactoryTransformerName("rsa")]
     public class RsaByteTransformer : ValueTransformer<byte[], byte[]>

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
-
-namespace Bam.Encryption.Data.Files
+﻿namespace Bam.Encryption.Data.Files
 {
     public class KeySetFile : KeySet, IApplicationKeySet
     {

@@ -1,10 +1,5 @@
 ﻿using Bam.Data.Repositories;
-using Bam.Encryption.Data.Files;
 using Org.BouncyCastle.Crypto;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
 
 namespace Bam.Encryption.Data
 {

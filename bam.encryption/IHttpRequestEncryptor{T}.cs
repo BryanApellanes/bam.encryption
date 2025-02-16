@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Bam.Encryption
+﻿namespace Bam.Encryption
 {
     /// <summary>
     /// A class used to encrypt the content body of a request.

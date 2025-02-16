@@ -1,9 +1,4 @@
 ﻿using Bam.Encryption;
-using Bam.ServiceProxy.Encryption;
-using Bam.Encryption;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Bam.Server
 {

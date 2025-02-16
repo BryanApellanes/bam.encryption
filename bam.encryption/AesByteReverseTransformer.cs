@@ -1,10 +1,5 @@
 ﻿using Bam.ServiceProxy;
 //using Bam.ServiceProxy.Data;
-using Bam.ServiceProxy.Encryption;
-using Bam.Services;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Bam.Encryption
 {

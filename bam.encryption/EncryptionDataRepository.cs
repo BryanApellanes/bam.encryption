@@ -1,5 +1,4 @@
 ﻿using Bam.Data;
-using Bam.Encryption.Data;
 
 namespace Bam.Encryption
 {
