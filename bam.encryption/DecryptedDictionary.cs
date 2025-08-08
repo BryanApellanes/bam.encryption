@@ -49,8 +49,8 @@
                     _encrypted.Add(key, value);
                 }
 
-                string decryptedKey = this.Decryptor.DecryptString(key);
-                string decryptedValue = this.Decryptor.DecryptString(value);
+                string decryptedKey = this.Decryptor.Decrypt(key);
+                string decryptedValue = this.Decryptor.Decrypt(value);
                 if(!_unencrypted.ContainsKey(decryptedKey))
                 {
                     _unencrypted.Add(decryptedKey, decryptedValue);

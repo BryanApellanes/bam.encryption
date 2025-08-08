@@ -11,8 +11,8 @@ namespace Bam.Encryption
         }
 
 
-        Func<AesKeyVectorPair> _keyProvider;
-        public Func<AesKeyVectorPair> KeyProvider 
+        Func<AesKey> _keyProvider;
+        public Func<AesKey> KeyProvider 
         {
             get
             {
@@ -64,9 +64,9 @@ namespace Bam.Encryption
         public byte[] ReverseTransform(byte[] cipherBytes)
         {
             Args.ThrowIfNull(KeyProvider, nameof(KeyProvider));
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
+            AesKey aesKey = KeyProvider();
 
-            return aesKeyVectorPair.DecryptBytes(cipherBytes);
+            return aesKey.DecryptBytes(cipherBytes);
         }
 
         public IValueTransformer<byte[], byte[]> GetTransformer()

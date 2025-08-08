@@ -5,7 +5,7 @@ namespace Bam.Encryption
     [PipelineFactoryTransformerName("aes")]
     public class AesByteTransformer : ValueTransformer<byte[], byte[]>
     {
-        public AesByteTransformer(Func<AesKeyVectorPair> keyProvider)
+        public AesByteTransformer(Func<AesKey> keyProvider)
         {
             this.AesByteReverseTransformer = new AesByteReverseTransformer(this);
             this.KeyProvider = keyProvider;
@@ -16,7 +16,7 @@ namespace Bam.Encryption
         { 
         }
 
-        public AesByteTransformer(AesKeyVectorPair aesKeyVectorPair) : this(() => aesKeyVectorPair)
+        public AesByteTransformer(AesKey aesKey) : this(() => aesKey)
         { 
         }
 
@@ -39,7 +39,7 @@ namespace Bam.Encryption
             }
         }
 
-        public Func<AesKeyVectorPair> KeyProvider { get; set; }
+        public Func<AesKey> KeyProvider { get; set; }
 
         public override byte[] ReverseTransform(byte[] cipherBytes)
         {
@@ -49,7 +49,7 @@ namespace Bam.Encryption
         public override byte[] Transform(byte[] plainData)
         {
             Args.ThrowIfNull(KeyProvider, nameof(KeyProvider));
-            AesKeyVectorPair aesKey = KeyProvider();
+            AesKey aesKey = KeyProvider();
 
             return aesKey.EncryptBytes(plainData);
         }

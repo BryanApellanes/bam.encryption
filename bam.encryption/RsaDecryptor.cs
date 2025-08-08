@@ -19,13 +19,18 @@
 
         public Func<RsaPublicPrivateKeyPair> KeyProvider { get; set; }
 
-        public string DecryptString(string cipher)
+        public string DecryptCipher(Cipher cipher)
+        {
+            return Decrypt(cipher.ToString());
+        }
+
+        public string Decrypt(string cipher)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();
             return rsaPublicPrivateKeyPair.Decrypt(cipher);
         }
 
-        public byte[] DecryptBytes(byte[] cipher)
+        public byte[] Decrypt(byte[] cipher)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();
             return rsaPublicPrivateKeyPair.DecryptBytes(cipher);

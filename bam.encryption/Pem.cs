@@ -9,6 +9,14 @@ namespace Bam.Encryption
 {
     public static class Pem
     {
+        public static string ObjectToPem(this object obj)
+        {
+            StringWriter stringWriter = new StringWriter();
+            PemWriter pemWriter = new PemWriter(stringWriter);
+            pemWriter.WriteObject(obj);
+            return stringWriter.ToString();          
+        }
+        
         public static string ToPem(this AsymmetricKeyParameter key)
         {
             StringWriter stringWriter = new StringWriter();
@@ -67,7 +75,7 @@ namespace Bam.Encryption
             return stringWriter.ToString();
         }
 
-        public static AsymmetricKeyParameter ToKey(this string pemString)
+        public static AsymmetricKeyParameter PemToKey(this string pemString)
         {
             TextReader reader = new StringReader(pemString);
             PemReader pemReader = new PemReader(reader);
@@ -75,12 +83,7 @@ namespace Bam.Encryption
             return (AsymmetricKeyParameter)pemObject;
         }
 
-        public static AsymmetricCipherKeyPair FromPem(this string pemString)
-        {
-            return pemString.ToKeyPair();
-        }
-
-        public static AsymmetricCipherKeyPair ToKeyPair(this string pemString)
+        public static AsymmetricCipherKeyPair PemToKeyPair(this string pemString)
         {
             TextReader reader = new StringReader(pemString);
             PemReader pemReader = new PemReader(reader);

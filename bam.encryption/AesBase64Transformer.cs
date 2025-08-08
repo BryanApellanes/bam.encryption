@@ -2,7 +2,7 @@
 {
     public class AesBase64Transformer : ValueTransformer<string, string>
     {
-        public AesBase64Transformer(Func<AesKeyVectorPair> keyProvider)
+        public AesBase64Transformer(Func<AesKey> keyProvider)
         {
             this.KeyProvider = keyProvider;
             this.AesBase64ReverseTransformer = new AesBase64ReverseTransformer(this);
@@ -12,13 +12,13 @@
         {
         }
 
-        public AesBase64Transformer(AesKeyVectorPair aesKeyVectorPair) : this(() => aesKeyVectorPair)
+        public AesBase64Transformer(AesKey aesKey) : this(() => aesKey)
         {
         }
 
         public AesBase64ReverseTransformer AesBase64ReverseTransformer { get; }
 
-        public Func<AesKeyVectorPair> KeyProvider { get; set; }
+        public Func<AesKey> KeyProvider { get; set; }
 
         public override string ReverseTransform(string base64Cipher)
         {
@@ -27,7 +27,7 @@
 
         public override string Transform(string plainText)
         {
-            AesKeyVectorPair aesKey = KeyProvider();
+            AesKey aesKey = KeyProvider();
             return aesKey.Encrypt(plainText);
         }
 

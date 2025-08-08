@@ -13,14 +13,6 @@ namespace Bam.Encryption
 {
     public static class Extensions
     {
-/*        public static Email SetCredentials(this Email email, Vault credentialVault)
-        {            
-            email.SmtpHost(credentialVault["SmtpHost"])
-                .UserName(credentialVault["UserName"])
-                .Password(credentialVault["Password"]);
-
-            return email;
-        }*/
 
         public static string AesPasswordEncrypt(this string plainText, string password)
         {
@@ -44,6 +36,12 @@ namespace Bam.Encryption
             gen.Init(parameters);
             return gen.GenerateKeyPair();
         }
+
+        /*public static void EcKeyPair()
+        {
+            ECKeyPairGenerator gen = new ECKeyPairGenerator();
+            ECKeyGenerationParameters parameters = new ECKeyGenerationParameters()
+        }*/
         
         /// <summary>
         /// Gets a base 64 encoded asymmetric cipher of the specified input.
@@ -54,7 +52,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static string EncryptWithPublicKey(this string input, string publicPemKey, Encoding encoding = null)
         {
-            return EncryptWithPublicKey(input, publicPemKey.ToKey(), encoding);
+            return EncryptWithPublicKey(input, publicPemKey.PemToKey(), encoding);
         }
         
         /// <summary>
@@ -85,7 +83,7 @@ namespace Bam.Encryption
 
         public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, string publicPemKey, IAsymmetricBlockCipher engine = null)
         {
-            return GetPublicKeyEncryptedBytes(plainData, publicPemKey.ToKey(), engine);
+            return GetPublicKeyEncryptedBytes(plainData, publicPemKey.PemToKey(), engine);
         }
 
         public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, AsymmetricKeyParameter key, IAsymmetricBlockCipher engine = null)
@@ -128,7 +126,7 @@ namespace Bam.Encryption
                 encoding = Encoding.UTF8;
             }
 
-            return DecryptWithPrivateKey(base64EncodedCipher, pemString.ToKeyPair(), encoding);
+            return DecryptWithPrivateKey(base64EncodedCipher, pemString.PemToKeyPair(), encoding);
         }
 
         /// <summary>

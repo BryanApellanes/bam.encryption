@@ -11,12 +11,17 @@ namespace Bam.Encryption
 
         protected SymmetricDataEncryptor<TData> Encryptor { get; private set; }
 
-        public TData Decrypt(Cipher<TData> cipherData)
+        public TData DecryptCipher(Cipher<TData> cipherData)
         {
             return ReverseTransform(cipherData);
         }
 
-        public string DecryptString(string cipher)
+        public string DecryptCipher(Cipher cipher)
+        {
+            return Decrypt(cipher.ToString());
+        }
+
+        public string Decrypt(string cipher)
         {
             byte[] cipherData = Convert.FromBase64String(cipher);
             byte[] utf8 = this.Encryptor.AesByteTransformer.ReverseTransform(cipherData);
@@ -24,7 +29,7 @@ namespace Bam.Encryption
             return Encoding.UTF8.GetString(utf8);
         }
 
-        public byte[] DecryptBytes(byte[] cipher)
+        public byte[] Decrypt(byte[] cipher)
         {
             return Encryptor.AesByteTransformer.ReverseTransform(cipher);
         }

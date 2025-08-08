@@ -8,7 +8,7 @@
 
         public TContent DecryptContentCipher(ContentCipher<TContent> contentCipher)
         {
-            return base.Decrypt(contentCipher);
+            return DecryptCipher((Cipher<TContent>)contentCipher);
         }
     }
 }

@@ -25,8 +25,8 @@ namespace Bam.Encryption
             this.Base64IV = iv;
         }
 
-        public Decrypted(string base64Cipher, AesKeyVectorPair aesKeyVectorPair) 
-            : this(base64Cipher.FromBase64(), aesKeyVectorPair.Key.FromBase64(), aesKeyVectorPair.Iv.FromBase64())
+        public Decrypted(string base64Cipher, AesKey aesKey) 
+            : this(base64Cipher.FromBase64(), aesKey.Key.FromBase64(), aesKey.Iv.FromBase64())
         { 
         }
 

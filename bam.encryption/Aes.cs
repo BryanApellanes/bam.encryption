@@ -16,7 +16,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static string Encrypt(string value)
         {
-            return Encrypt(value, AesKeyVectorPair.SystemKey);
+            return Encrypt(value, XmlBase64Aeskey.SystemKey);
         }
 
         public static string Encrypt(string value, string password)
@@ -44,7 +44,7 @@ namespace Bam.Encryption
         /// <param name="value"></param>
         /// <param name="key"></param>
         /// <returns></returns>
-        public static string Encrypt(string value, AesKeyVectorPair key)
+        public static string Encrypt(string value, AesKey key)
         {
             return Encrypt(value, key.Key, key.Iv);
         }
@@ -115,7 +115,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public static string Decrypt(string base64EncodedValue)
         {
-            return Decrypt(base64EncodedValue, AesKeyVectorPair.SystemKey);
+            return Decrypt(base64EncodedValue, XmlBase64Aeskey.SystemKey);
         }
 
         /// <summary>
@@ -124,7 +124,7 @@ namespace Bam.Encryption
         /// <param name="base64EncodedValue">The base64 encoded value.</param>
         /// <param name="key">The key.</param>
         /// <returns></returns>
-        public static string Decrypt(string base64EncodedValue, AesKeyVectorPair key)
+        public static string Decrypt(string base64EncodedValue, AesKey key)
         {
             return Decrypt(base64EncodedValue, key.Key, key.Iv);
         }
@@ -171,7 +171,7 @@ namespace Bam.Encryption
         /// <param name="target">The target.</param>
         /// <param name="filePath">The file path.</param>
         /// <returns></returns>
-        public static AesKeyVectorPair Encrypt(this object target, string filePath)
+        public static AesKey Encrypt(this object target, string filePath)
         {
             return Encrypt(target, filePath, filePath + ".key", true);
         }
@@ -184,14 +184,14 @@ namespace Bam.Encryption
         /// <param name="filePath">The file path.</param>
         /// <param name="keyFilePath">The key file path.</param>
         /// <returns></returns>
-        public static AesKeyVectorPair Encrypt(this object target, string filePath, string keyFilePath)
+        public static AesKey Encrypt(this object target, string filePath, string keyFilePath)
         {
             return Encrypt(target, filePath, keyFilePath, true);
         }
 
-        public static AesKeyVectorPair Encrypt(this object target, string filePath, string keyFilePath, bool writeKeyFile)
+        public static AesKey Encrypt(this object target, string filePath, string keyFilePath, bool writeKeyFile)
         {
-            string text = ToBase64EncodedEncryptedXml(target, out AesKeyVectorPair key);
+            string text = ToBase64EncodedEncryptedXml(target, out XmlBase64Aeskey key);
             using (StreamWriter sw = new StreamWriter(filePath))
             {
                 sw.Write(text);
@@ -223,12 +223,12 @@ namespace Bam.Encryption
                 throw new FileNotFoundException(string.Format("The key file specified {0} does not exist", keyFile));
             }
 
-            AesKeyVectorPair key = AesKeyVectorPair.LoadXmlBase64(keyFile); 
+            AesKey key = XmlBase64Aeskey.LoadXmlBase64(keyFile); 
 
             return Decrypt<T>(filePath, key);
         }
 
-        public static T Decrypt<T>(string filePath, AesKeyVectorPair key)
+        public static T Decrypt<T>(string filePath, AesKey key)
         {
             string text;
             using (StreamReader sr = new StreamReader(filePath))
@@ -244,13 +244,13 @@ namespace Bam.Encryption
         /// <param name="target">The object to serialize</param>
         /// <param name="key">The key used to encrypt and decrypt the resulting string</param>
         /// <returns>string</returns>
-        public static string ToBase64EncodedEncryptedXml(this object target, out AesKeyVectorPair key)
+        public static string ToBase64EncodedEncryptedXml(this object target, out XmlBase64Aeskey key)
         {
             string xml = ObjectExtensions.ToXml(target);
             AesManaged rm = new AesManaged();
             rm.GenerateIV();
             rm.GenerateKey();
-            key = new AesKeyVectorPair
+            key = new XmlBase64Aeskey()
             {
                 Key = Convert.ToBase64String(rm.Key),
                 Iv = Convert.ToBase64String(rm.IV)
@@ -266,10 +266,10 @@ namespace Bam.Encryption
         /// <param name="base64EncryptedXmlString">The base64 encrypted XML string.</param>
         /// <param name="key">The key.</param>
         /// <returns></returns>
-        public static T Deserialize<T>(string base64EncryptedXmlString, AesKeyVectorPair key)
+        public static T Deserialize<T>(string base64EncryptedXmlString, AesKey key)
         {
             string xml = Decrypt(base64EncryptedXmlString, key.Key, key.Iv);
-            return StringExtensions.FromXml<T>(xml);
+            return Bam.StringExtensions.FromXml<T>(xml);
         }
     }
 }

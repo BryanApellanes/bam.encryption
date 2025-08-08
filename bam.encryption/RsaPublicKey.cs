@@ -3,9 +3,9 @@ using System.Text;
 
 namespace Bam.Encryption
 {
-    public class RsaPublicKey
+    public class RsaPublicKey : PublicKey
     {
-        public RsaPublicKey(string publicKeyPem)
+        public RsaPublicKey(string publicKeyPem) : base(publicKeyPem.PemToKey())
         {
             this.Pem = publicKeyPem;
         }

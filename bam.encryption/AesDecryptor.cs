@@ -7,28 +7,33 @@
             this.KeyProvider = () => aesKeySource.GetAesKey();
         }
 
-        public AesDecryptor(Func<AesKeyVectorPair> keyProvider)
+        public AesDecryptor(Func<AesKey> keyProvider)
         {
             this.KeyProvider = keyProvider;
         }
 
-        public AesDecryptor(AesKeyVectorPair aesKeyVectorPair)
+        public AesDecryptor(AesKey aesKey)
         {
-            this.KeyProvider = () => aesKeyVectorPair;
+            this.KeyProvider = () => aesKey;
         }
 
-        public Func<AesKeyVectorPair> KeyProvider { get; set; }
+        public Func<AesKey> KeyProvider { get; set; }
 
-        public string DecryptString(string cipher)
+        public string DecryptCipher(Cipher cipher)
         {
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
-            return aesKeyVectorPair.Decrypt(cipher);
+            return Decrypt(cipher.ToString());
         }
 
-        public byte[] DecryptBytes(byte[] cipher)
+        public string Decrypt(string cipher)
         {
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
-            return aesKeyVectorPair.DecryptBytes(cipher);
+            AesKey aesKey = KeyProvider();
+            return aesKey.Decrypt(cipher);
+        }
+
+        public byte[] Decrypt(byte[] cipher)
+        {
+            AesKey aesKey = KeyProvider();
+            return aesKey.DecryptBytes(cipher);
         }
     }
 }

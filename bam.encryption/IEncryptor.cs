@@ -9,7 +9,8 @@
 
     public interface IEncryptor
     {
-        string EncryptString(string plainData);
-        byte[] EncryptBytes(byte[] plainData);
+        IDecryptor GetDecryptor();
+        string Encrypt(string plainData);
+        byte[] Encrypt(byte[] plainData);
     }
 }

@@ -12,7 +12,7 @@ namespace Bam.Encryption
         /// <param name="saltKey">The salt key.</param>
         public DefaultConfigurationSaltProvider(string saltKey)
         {
-            _salt = DefaultConfiguration.GetAppSetting(saltKey, 2.RandomLetters());            
+            _salt = DefaultConfiguration.GetAppSetting(saltKey, 6.RandomLetters());            
         }
 
         public DefaultConfigurationSaltProvider() : this("Salt")

@@ -6,28 +6,33 @@
         {
             this.KeyProvider = () => keySource.GetAesKey();
         }
-        public AesEncryptor(Func<AesKeyVectorPair> keyProvider)
+        public AesEncryptor(Func<AesKey> keyProvider)
         {
             this.KeyProvider = keyProvider;
         }
 
-        public AesEncryptor(AesKeyVectorPair aesKeyVectorPair)
+        public AesEncryptor(AesKey aesKey)
         {
-            this.KeyProvider = () => aesKeyVectorPair;
+            this.KeyProvider = () => aesKey;
         }
 
-        public Func<AesKeyVectorPair> KeyProvider { get; set; }
+        public Func<AesKey> KeyProvider { get; set; }
 
-        public string EncryptString(string plainData)
+        public IDecryptor GetDecryptor()
         {
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
-            return aesKeyVectorPair.Encrypt(plainData);
+            return new AesDecryptor(this.KeyProvider);
         }
 
-        public byte[] EncryptBytes(byte[] plainData)
+        public string Encrypt(string plainData)
         {
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
-            return aesKeyVectorPair.EncryptBytes(plainData);            
+            AesKey aesKey = KeyProvider();
+            return aesKey.Encrypt(plainData);
+        }
+
+        public byte[] Encrypt(byte[] plainData)
+        {
+            AesKey aesKey = KeyProvider();
+            return aesKey.EncryptBytes(plainData);            
         }
     }
 }

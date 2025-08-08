@@ -27,6 +27,10 @@ namespace Bam.Encryption
             this.Plain = plainText;
         }
 
+        public Encrypted(string plainText, AesKey key): this(plainText, key.Key, key.Iv)
+        {
+        }
+        
         /// <summary>
         /// 
         /// </summary>
@@ -124,7 +128,7 @@ namespace Bam.Encryption
 
         private byte[] Encrypt()
         {
-            Base64Cipher = Aes.Encrypt(string.Concat(Plain, SaltLength.RandomLetters()), Base64Key, Base64IV);
+            Base64Cipher = Aes.Encrypt(string.Concat(Plain, SaltLength.SecureAlphaNumericCharacters()), Base64Key, Base64IV);
             return Cipher;
         }
     }

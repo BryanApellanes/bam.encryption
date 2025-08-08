@@ -6,6 +6,6 @@
         /// Get an aes key.
         /// </summary>
         /// <returns>AesKeyVectorPair</returns>
-        AesKeyVectorPair GetAesKey();
+        AesKey GetAesKey();
     }
 }

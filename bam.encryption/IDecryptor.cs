@@ -2,12 +2,13 @@
 {
     public interface IDecryptor<TData> : IDecryptor
     {
-        TData Decrypt(Cipher<TData> cipherData);
+        TData DecryptCipher(Cipher<TData> cipherData);
     }
 
     public interface IDecryptor
     {
-        string DecryptString(string cipher);
-        byte[] DecryptBytes(byte[] cipher);
+        string DecryptCipher(Cipher cipher);
+        string Decrypt(string cipher);
+        byte[] Decrypt(byte[] cipher);
     }
 }

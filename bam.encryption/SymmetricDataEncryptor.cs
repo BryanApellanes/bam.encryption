@@ -1,9 +1,14 @@
 ﻿using System.Text;
+using Bam.Storage;
 
 namespace Bam.Encryption
 {
     public class SymmetricDataEncryptor<TData> : ValueTransformerPipeline<TData>, IEncryptor<TData>
     {
+        public SymmetricDataEncryptor(Func<IAesKeySource> aesKeySource) : this(aesKeySource())
+        {
+        }
+        
         public SymmetricDataEncryptor(IAesKeySource aesKeySource)
         {
             this.AesByteTransformer = new AesByteTransformer(aesKeySource);
@@ -37,12 +42,17 @@ namespace Bam.Encryption
             return GetReverseTransformer();
         }
 
+        IDecryptor IEncryptor.GetDecryptor()
+        {
+            return GetDecryptor();
+        }
+
         /// <summary>
         /// Encrypt the specified string
         /// </summary>
         /// <param name="plainData">The data to encrypt.</param>
         /// <returns>The base64 encoded cipher.</returns>
-        public string EncryptString(string plainData)
+        public string Encrypt(string plainData)
         {
             byte[] utf8 = Encoding.UTF8.GetBytes(plainData);
             byte[] cipherData = AesByteTransformer.Transform(utf8);
@@ -55,7 +65,7 @@ namespace Bam.Encryption
         /// </summary>
         /// <param name="plainData">The data to encrypt.</param>
         /// <returns>The cipher.</returns>
-        public byte[] EncryptBytes(byte[] plainData)
+        public byte[] Encrypt(byte[] plainData)
         {
             return AesByteTransformer.Transform(plainData);
         }

@@ -15,7 +15,7 @@ namespace Bam.Encryption
 
         protected AesBase64Transformer AesBase64Transformer { get; set; }
 
-        public Func<AesKeyVectorPair> KeyProvider { get; set; }
+        public Func<AesKey> KeyProvider { get; set; }
 
         public Encoding Encoding { get; set; }
         public IHttpContext HttpContext { get; set; }
@@ -44,9 +44,9 @@ namespace Bam.Encryption
 
         public string ReverseTransform(string base64EncodedCipher)
         {
-            AesKeyVectorPair aesKeyVectorPair = KeyProvider();
+            AesKey aesKey = KeyProvider();
             byte[] cipherBytes = Convert.FromBase64String(base64EncodedCipher);
-            byte[] decipheredBytes = aesKeyVectorPair.DecryptBytes(cipherBytes);
+            byte[] decipheredBytes = aesKey.DecryptBytes(cipherBytes);
 
             return Encoding.GetString(decipheredBytes);
         }

@@ -1,5 +1,6 @@
 ﻿namespace Bam.Encryption
 {
+    [Obsolete("Use EccPublicPrivateKeyPair for this purpose")]
     public interface IAesKeyExchange
     {
         /// <summary>

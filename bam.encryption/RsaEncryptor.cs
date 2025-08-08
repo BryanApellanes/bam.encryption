@@ -18,13 +18,18 @@
         }
 
         public Func<RsaPublicPrivateKeyPair> KeyProvider { get; set; }
-        public string EncryptString(string plainData)
+        public IDecryptor GetDecryptor()
+        {
+            return new RsaDecryptor(this.KeyProvider);
+        }
+
+        public string Encrypt(string plainData)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();            
             return rsaPublicPrivateKeyPair.Encrypt(plainData);
         }
 
-        public byte[] EncryptBytes(byte[] plainData)
+        public byte[] Encrypt(byte[] plainData)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();
             return rsaPublicPrivateKeyPair.EncryptBytes(plainData);

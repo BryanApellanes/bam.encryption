@@ -5,7 +5,7 @@ namespace Bam.Encryption
 {
     public class RsaPublicPrivateKeyPair : IRsaKeySource
     {
-        public RsaPublicPrivateKeyPair(RsaKeyLength rsaKeyLength = RsaKeyLength._2048)
+        public RsaPublicPrivateKeyPair(RsaKeyLength rsaKeyLength = RsaKeyLength._4096)
         {
             this.RsaKeyLength = rsaKeyLength;
             this.AsymmetricCipherKeyPair = Rsa.GenerateKeyPair(rsaKeyLength);
@@ -17,14 +17,14 @@ namespace Bam.Encryption
         {
             this.RsaKeyLength = RsaKeyLength.Unkown;
             this.Pem = pemString;
-            this.AsymmetricCipherKeyPair = pemString.ToKeyPair();
+            this.AsymmetricCipherKeyPair = pemString.PemToKeyPair();
             this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
         }
 
         AsymmetricCipherKeyPair? _asymmetricCipherKeyPair;
-        protected AsymmetricCipherKeyPair AsymmetricCipherKeyPair
+        protected internal AsymmetricCipherKeyPair AsymmetricCipherKeyPair
         {
-            get => _asymmetricCipherKeyPair ??= Pem.ToKeyPair();
+            get => _asymmetricCipherKeyPair ??= Pem.PemToKeyPair();
             set => _asymmetricCipherKeyPair = value;
         }
 
@@ -108,6 +108,11 @@ namespace Bam.Encryption
             return cipherBytes.DecryptWithPrivateKey(AsymmetricCipherKeyPair.Private, engine);
         }
 
+        public AsymmetricCipherKeyPair GetAsymmetricCipherKeyPair()
+        {
+            return AsymmetricCipherKeyPair;
+        }
+        
         public RsaPublicKey GetRsaPublicKey()
         {
             return new RsaPublicKey(PublicKeyPem);

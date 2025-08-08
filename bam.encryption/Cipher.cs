@@ -65,5 +65,10 @@
         }
 
         public byte[] Data { get; set; }
+
+        public override string ToString()
+        {
+            return Data.ToBase64();
+        }
     }
 }
