@@ -42,4 +42,26 @@ public class EccPublicPrivateKeyPairShould : UnitTestMenuContainer
         
         decrypted1.ShouldBeEqualTo(decrypted2);
     }
+    
+    [UnitTest]
+    public void GenerateSameAesKeyWithOneEccPair()
+    {
+        EccPublicPrivateKeyPair ecc = new EccPublicPrivateKeyPair();
+
+        AesKey aes1 = ecc.GetSharedAesKey(ecc.PublicKeyPem);
+        AesKey aes2 = ecc.GetSharedAesKey(ecc.PublicKeyPem);
+
+        string testValue = 128.RandomLetters();
+        
+        string cipher1 = aes1.Encrypt(testValue);
+        string cipher2 = aes2.Encrypt(testValue);
+        
+        string decrypted1 = aes1.Decrypt(cipher2);
+        string decrypted2 = aes2.Decrypt(cipher1);
+        
+        decrypted1.ShouldBeEqualTo(testValue);
+        decrypted2.ShouldBeEqualTo(testValue);
+        
+        decrypted1.ShouldBeEqualTo(decrypted2);
+    }
 }

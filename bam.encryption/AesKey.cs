@@ -12,7 +12,7 @@ namespace Bam.Encryption
     [Serializable]
     public class AesKey : IAesKeySource
     {
-        public const string SystemKeyFileName = "_bam.aes";
+        public const string SystemKeyFileName = "aes.sys";
 
         static AesKey()
         {

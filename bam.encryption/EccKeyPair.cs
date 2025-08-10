@@ -2,11 +2,28 @@
 
 public class EccKeyPair : KeyPair
 {
-    public EccKeyPair() : base(new EccPublicPrivateKeyPair())
+    public EccKeyPair() : this(new EccPublicPrivateKeyPair())
     {
     }
 
     public EccKeyPair(EccPublicPrivateKeyPair eccKeyPair) : base(eccKeyPair)
     {
+        this.PublicPrivateKeyPair = eccKeyPair;
+    }
+    
+    protected EccPublicPrivateKeyPair PublicPrivateKeyPair { get; set; }
+
+    /// <summary>
+    /// Gets an AES key using its own public key.
+    /// </summary>
+    /// <returns></returns>
+    public AesKey GetAesKey()
+    {
+        return PublicPrivateKeyPair.GetSharedAesKey(PublicPem);
+    }
+
+    public AesKey GetSharedAesKey(string otherPublicPem)
+    {
+        return PublicPrivateKeyPair.GetSharedAesKey(otherPublicPem);
     }
 }
