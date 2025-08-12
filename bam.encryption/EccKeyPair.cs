@@ -17,7 +17,7 @@ public class EccKeyPair : KeyPair
     /// Gets an AES key using its own public key.
     /// </summary>
     /// <returns></returns>
-    public AesKey GetAesKey()
+    public AesKey GetSelfAesKey()
     {
         return PublicPrivateKeyPair.GetSharedAesKey(PublicPem);
     }

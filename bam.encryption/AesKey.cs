@@ -112,7 +112,7 @@ namespace Bam.Encryption
         public string Iv { get; set; }
 
         /// <summary>
-        /// Gets a Base64 encoded value representing the cypher of the specified
+        /// Gets a Base64 encoded value representing the cipher of the specified
         /// value using the current key.
         /// </summary>
         public string Encrypt(string plainText)
