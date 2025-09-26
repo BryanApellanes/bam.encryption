@@ -7,7 +7,7 @@ using Org.BouncyCastle.Security;
 
 namespace Bam.Encryption;
 
-public class EccPublicPrivateKeyPair
+public class EccPublicPrivateKeyPair : IEccKeySource
 {
     public EccPublicPrivateKeyPair()
     {
@@ -69,5 +69,15 @@ public class EccPublicPrivateKeyPair
         string hex = sharedSecret.ToHexString();
         Span<byte> bytes = Hmac.Sha256(hex, hex);
         return new AesKey(sharedSecret, bytes.Slice(0, 16).ToArray());
+    }
+
+    public EccPublicPrivateKeyPair GetEccKey()
+    {
+        return this;
+    }
+
+    public EccPublicKey GetEccPublicKey()
+    {
+        return new EccPublicKey(PublicKeyPem);
     }
 }

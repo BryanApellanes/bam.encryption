@@ -16,6 +16,7 @@ public abstract class PrivateKey : IPrivateKey
     {
         this.Value = key;
     }
-    
+
+    public string Pem => Value.ToPem();
     public AsymmetricKeyParameter Value { get; }
 }

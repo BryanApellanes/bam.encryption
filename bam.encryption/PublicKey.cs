@@ -16,6 +16,8 @@ public abstract class PublicKey : IPublicKey
     {
         this.Value = key;
     }
+
+    public virtual string Pem => Value.ToPem();
     
     public AsymmetricKeyParameter Value { get; }
 }

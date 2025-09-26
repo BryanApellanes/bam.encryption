@@ -4,19 +4,15 @@ using Org.BouncyCastle.Security;
 
 namespace Bam.Encryption;
 
-public class SignatureProvider : ISignatureProvider
+public abstract class SignatureProvider : ISignatureProvider
 {
-    public ISignature Sign(IRsaKeySource privateKeySource, string data, string algorithm = "SHA512WITHRSA")
-    {
-        return Sign(new PrivateKeyProvider(privateKeySource.GetRsaKey().AsymmetricCipherKeyPair.Private), data,
-            algorithm);
-    }
+
 
     public ISignature Sign(IPrivateKeyProvider privateKeySource, string data, string algorithm = "SHA512WITHRSA")
     {
         ISigner signer = SignerUtilities.GetSigner(algorithm);
         signer.Init(true, privateKeySource.GetPrivateKey());
-        
+
         byte[] dataBytes = Encoding.UTF8.GetBytes(data);
         signer.BlockUpdate(dataBytes, 0, dataBytes.Length);
         byte[] signature = signer.GenerateSignature();
