@@ -1,8 +1,9 @@
 ﻿using Org.BouncyCastle.Crypto;
+using System.Text;
 
 namespace Bam.Encryption;
 
-public abstract class PrivateKey : IPrivateKey
+public abstract class PrivateKey : DisposablePem, IPrivateKey
 {
     public PrivateKey(RsaPublicPrivateKeyPair rsaKeyPair): this(rsaKeyPair.AsymmetricCipherKeyPair.Private)
     {
@@ -15,8 +16,8 @@ public abstract class PrivateKey : IPrivateKey
     public PrivateKey(AsymmetricKeyParameter key)
     {
         this.Value = key;
+        this.Pem = Value.ToPem(Encoding.UTF8);
     }
 
-    public string Pem => Value.ToPem();
     public AsymmetricKeyParameter Value { get; }
 }

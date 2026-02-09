@@ -32,7 +32,7 @@
         public byte[] Encrypt(byte[] plainData)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();
-            return rsaPublicPrivateKeyPair.EncryptBytes(plainData);
+            return rsaPublicPrivateKeyPair.Encrypt(plainData);
         }
     }
 }

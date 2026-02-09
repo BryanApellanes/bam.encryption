@@ -4,6 +4,8 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
+using System;
+using System.Text;
 
 namespace Bam.Encryption;
 
@@ -12,14 +14,14 @@ public class EccPublicPrivateKeyPair : IEccKeySource
     public EccPublicPrivateKeyPair()
     {
         this.AsymmetricCipherKeyPair = Generate();
-        this.Pem = AsymmetricCipherKeyPair.ToPem();
+        this.Pem = AsymmetricCipherKeyPair.ToPem(Encoding.UTF8);
         this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
     }
 
-    public EccPublicPrivateKeyPair(string pemString)
+    public EccPublicPrivateKeyPair(byte[] pem)
     {
-        this.Pem = pemString;
-        this.AsymmetricCipherKeyPair = pemString.PemToKeyPair();
+        this.Pem = pem;
+        this.AsymmetricCipherKeyPair = pem.PemToKeyPair();
         this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
     }
     
@@ -30,7 +32,7 @@ public class EccPublicPrivateKeyPair : IEccKeySource
         set => _asymmetricCipherKeyPair = value;
     }
     
-    protected internal string Pem { get; private set; }
+    protected internal byte[] Pem { get; private set; }
     
     public string PublicKeyPem { get; private set; }
 

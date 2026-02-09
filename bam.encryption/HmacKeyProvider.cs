@@ -21,22 +21,39 @@ public class HmacKeyProvider : IHmacKeyProvider
         return result;
     }
 
+    /// <summary>
+    /// Retrieves the HMAC key associated with the specified name, creating and persisting a new key if one does not
+    /// already exist.
+    /// </summary>
+    /// <remarks>If the key does not exist, a new HMAC key is generated and optionally persisted based on the
+    /// value of the PersistNamedHmacKeys property. The same key will be returned for subsequent calls with the same
+    /// name, unless the underlying storage is modified.</remarks>
+    /// <param name="name">The unique name identifying the HMAC key to retrieve. Cannot be null.</param>
+    /// <returns>A byte array containing the HMAC key associated with the specified name. If no key exists for the given name, a
+    /// new key is generated and returned.</returns>
     public byte[] GetNamedHmacKey(string name)
     {
+        bool newKey = false;
         string fileName = $"hmac_key-{name}";
-        if (BamProfile.TryReadVaultDotSysFile(fileName, out string content))
+        if (BamProfile.TryReadVaultDotSysFileBytes(fileName, out byte[]? content))
         {
-            _hmacKeys[name] = content.FromBase64();
+            if(content == null)
+            {
+                content = GetNewHmacKey();
+                newKey = true;
+            }
+            _hmacKeys[name] = content;
         }
         if (!_hmacKeys.ContainsKey(name))
         {
             _hmacKeys.Add(name, GetNewHmacKey());
+            newKey = true;
         }
         
         byte[] hmacKey = _hmacKeys[name];
-        if (PersistNamedHmacKeys)
+        if (PersistNamedHmacKeys && newKey)
         {
-            BamProfile.WriteVaultDotSysFile(fileName, hmacKey.ToBase64());
+            BamProfile.WriteVaultDotSysFile(fileName, hmacKey);
         }
         return hmacKey;
     }

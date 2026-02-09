@@ -178,7 +178,7 @@ namespace Bam.Encryption
             return output.ToArray();
         }
 
-        public static byte[] DecryptWithPrivateKey(this byte[] byteArrayCipher, AsymmetricKeyParameter key, IAsymmetricBlockCipher engine = null)
+        public static byte[] DecryptWithPrivateKey(this byte[] byteArrayCipher, AsymmetricKeyParameter key, IAsymmetricBlockCipher? engine = null)
         {
             if (engine == null)
             {

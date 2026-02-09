@@ -9,7 +9,7 @@ namespace Bam.Encryption
     /// <summary>
     /// A salted encryption cipher.
     /// </summary>
-    public class Encrypted
+    public class Encrypted : DisposableAesKey
     {
         protected static readonly int DefaultSaltLength = 8;
 
@@ -27,25 +27,14 @@ namespace Bam.Encryption
             this.Plain = plainText;
         }
 
-        public Encrypted(string plainText, AesKey key): this(plainText, key.Key, key.Iv)
-        {
-        }
-        
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="plainText">The plain text data to be encrypted</param>
-        /// <param name="b64Key">A base 64 encoded key</param>
-        /// <param name="b64IV">A base 64 encoded initialization vector</param>
-        public Encrypted(string plainText, string b64Key, string b64IV) : this()
+        public Encrypted(string plainText, AesKey key)//: this(plainText, key.Key, key.IV)
         {
             this.Plain = plainText;
-
-            this.Base64Key = b64Key;
-            this.Base64IV = b64IV;
-
+            this.Key = key.Key;
+            this.IV = key.IV;
             this.Cipher = Encrypt();
         }
+        
 
         protected Encrypted(byte[] cipher, byte[] key, byte[] iv) : this()
         {
@@ -60,18 +49,6 @@ namespace Bam.Encryption
         }
 
         public virtual string Value => Base64Cipher;
-
-        public byte[] Key
-        {
-            get;
-            set;
-        }
-
-        public byte[] IV
-        {
-            get;
-            private set;
-        }
 
         public int SaltLength
         {

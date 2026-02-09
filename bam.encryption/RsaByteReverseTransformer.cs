@@ -48,7 +48,7 @@ namespace Bam.Encryption
         {
             RsaPublicPrivateKeyPair rsaKey = KeyProvider();
 
-            return rsaKey.DecryptBytes(cipherBytes);
+            return rsaKey.Decrypt(cipherBytes);
         }
 
         public IValueTransformer<byte[], byte[]> GetTransformer()

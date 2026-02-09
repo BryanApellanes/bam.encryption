@@ -18,15 +18,8 @@ namespace Bam.Encryption
             Decrypt();
         }
 
-        public Decrypted(string base64Cipher, string b64Key, string iv)
-        {
-            this.Base64Cipher = base64Cipher;
-            this.Base64Key = b64Key;
-            this.Base64IV = iv;
-        }
-
         public Decrypted(string base64Cipher, AesKey aesKey) 
-            : this(base64Cipher.FromBase64(), aesKey.Key.FromBase64(), aesKey.Iv.FromBase64())
+            : this(base64Cipher.FromBase64(), aesKey.Key, aesKey.IV)
         { 
         }
 
@@ -56,7 +49,7 @@ namespace Bam.Encryption
 
         public static string Decrypt(byte[] cipher, byte[] key, byte[] iv)
         {
-            return Aes.Decrypt(Convert.ToBase64String(cipher), Convert.ToBase64String(key), Convert.ToBase64String(iv));
+            return Aes.Decrypt(cipher, key, iv);
         }
     }
 }

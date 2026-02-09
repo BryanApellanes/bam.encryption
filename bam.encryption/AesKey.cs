@@ -10,7 +10,7 @@ namespace Bam.Encryption
     /// Represents a portable key and initialization vector for use in Aes encryption and decryption operations.
     /// </summary>
     [Serializable]
-    public class AesKey : IAesKeySource
+    public class AesKey : DisposableAesKey, IAesKeySource
     {
         public const string SystemKeyFileName = "aes.sys";
 
@@ -24,16 +24,16 @@ namespace Bam.Encryption
             SetKeyAndIv();
         }
 
-        public AesKey(string base64EncodedKey, string base64EncodedIv)
+        public AesKey(string base64EncodedKey, string base64EncodedIV)
         {
-            this.Key = base64EncodedKey;
-            this.Iv = base64EncodedIv;
+            this.Key = base64EncodedKey.FromBase64();
+            this.IV = base64EncodedIV.FromBase64();
         }
 
         public AesKey(byte[] key, byte[] iv)
         {
-            this.Key = key.ToBase64();
-            this.Iv = iv.ToBase64();
+            this.Key = key;
+            this.IV = iv;
         }
 
         private void SetKeyAndIv()
@@ -41,8 +41,8 @@ namespace Bam.Encryption
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
             aes.GenerateKey();
             aes.GenerateIV();
-            this.Key = Convert.ToBase64String(aes.Key);
-            this.Iv = Convert.ToBase64String(aes.IV);
+            this.Key = aes.Key;
+            this.IV = aes.IV;
         }
 
         protected static string SystemKeyFilePath
@@ -101,7 +101,7 @@ namespace Bam.Encryption
         /// <value>
         /// The key.
         /// </value>
-        public string Key { get; set; }
+        public byte[] Key { get; set; }
 
         /// <summary>
         /// Gets or sets the base 64 encoded initialization vector.
@@ -109,7 +109,7 @@ namespace Bam.Encryption
         /// <value>
         /// The iv.
         /// </value>
-        public string Iv { get; set; }
+        public byte[] IV { get; set; }
 
         /// <summary>
         /// Gets a Base64 encoded value representing the cipher of the specified
@@ -132,12 +132,12 @@ namespace Bam.Encryption
 
         public byte[] EncryptBytes(byte[] data)
         {
-            return Aes.EncryptBytes(data, this.Key, this.Iv);
+            return Aes.EncryptBytes(data, this.Key, this.IV);
         }
 
         public byte[] DecryptBytes(byte[] cipherData)
         {
-            return Aes.DecryptBytes(cipherData, this.Key, this.Iv);
+            return Aes.DecryptBytes(cipherData, this.Key, this.IV);
         }
 
         public AesKey GetAesKey()

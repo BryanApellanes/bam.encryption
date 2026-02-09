@@ -6,7 +6,7 @@ namespace Bam.encryption;
 public interface IKeyPair
 {
     string PublicPem { get; }
-    string PrivatePem { get; }
+    byte[] Pem { get; }
     IPublicKey PublicKey { get; }
     IPrivateKey PrivateKey { get; }
 }

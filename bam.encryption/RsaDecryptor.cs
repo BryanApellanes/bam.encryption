@@ -33,7 +33,7 @@
         public byte[] Decrypt(byte[] cipher)
         {
             RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair = KeyProvider();
-            return rsaPublicPrivateKeyPair.DecryptBytes(cipher);
+            return rsaPublicPrivateKeyPair.Decrypt(cipher);
         }
     }
 }

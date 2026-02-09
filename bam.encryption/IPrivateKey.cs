@@ -4,6 +4,6 @@ namespace Bam.Encryption;
 
 public interface IPrivateKey
 {
-    string Pem { get; }
+    byte[] Pem { get; }
     AsymmetricKeyParameter Value { get; }
 }
