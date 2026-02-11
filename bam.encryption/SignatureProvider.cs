@@ -31,7 +31,7 @@ public abstract class SignatureProvider : ISignatureProvider
             ISigner signer = SignerUtilities.GetSigner(signature.Algorithm);
             signer.Init(false, issuerPublicKey.Value);
             byte[] dataToVerify = Encoding.UTF8.GetBytes(signature.Data);
-            signer.BlockUpdate(dataToVerify, 0, signature.SignatureBytes.Length);
+            signer.BlockUpdate(dataToVerify, 0, dataToVerify.Length);
             return new SignatureVerification()
             {
                 Signature = signature,

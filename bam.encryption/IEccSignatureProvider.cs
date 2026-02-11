@@ -1,14 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+namespace Bam.Encryption;
 
-namespace Bam.Encryption
+public interface IEccSignatureProvider : ISignatureProvider
 {
-    public interface IEccSignatureProvider : ISignatureProvider
-    {
-                ISignature Sign(IRsaKeySource privateKeySource, string data, string algorithm = "SHA512WITHRSA");
-
-    }
+    ISignature Sign(IEccKeySource eccKeySource, string data, string algorithm = "SHA256WITHECDSA");
 }
