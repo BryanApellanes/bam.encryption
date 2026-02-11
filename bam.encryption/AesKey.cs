@@ -101,7 +101,7 @@ namespace Bam.Encryption
         /// <value>
         /// The key.
         /// </value>
-        public byte[] Key { get; set; }
+        public override byte[] Key { get; set; }
 
         /// <summary>
         /// Gets or sets the base 64 encoded initialization vector.
@@ -109,7 +109,7 @@ namespace Bam.Encryption
         /// <value>
         /// The iv.
         /// </value>
-        public byte[] IV { get; set; }
+        public override byte[] IV { get; set; }
 
         /// <summary>
         /// Gets a Base64 encoded value representing the cipher of the specified

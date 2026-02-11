@@ -10,8 +10,8 @@ namespace Bam.Encryption
     {
         private bool _disposed = false;
 
-        internal byte[] Key { get; set; }
-        internal byte[] IV { get; set; }
+        public virtual byte[] Key { get; set; }
+        public virtual byte[] IV { get; set; }
 
         public void Dispose()
         {

@@ -9,8 +9,10 @@ using System.Text;
 
 namespace Bam.Encryption;
 
-public class EccPublicPrivateKeyPair : IEccKeySource
+public class EccPublicPrivateKeyPair : IEccKeySource, IDisposable
 {
+    private bool _disposed = false;
+
     public EccPublicPrivateKeyPair()
     {
         this.AsymmetricCipherKeyPair = Generate();
@@ -24,16 +26,16 @@ public class EccPublicPrivateKeyPair : IEccKeySource
         this.AsymmetricCipherKeyPair = pem.PemToKeyPair();
         this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
     }
-    
+
     AsymmetricCipherKeyPair? _asymmetricCipherKeyPair;
     protected internal AsymmetricCipherKeyPair AsymmetricCipherKeyPair
     {
         get => _asymmetricCipherKeyPair ??= Pem.PemToKeyPair();
         set => _asymmetricCipherKeyPair = value;
     }
-    
+
     protected internal byte[] Pem { get; private set; }
-    
+
     public string PublicKeyPem { get; private set; }
 
     public AesKey GetSharedAesKey(string otherPublicPemString)
@@ -81,5 +83,31 @@ public class EccPublicPrivateKeyPair : IEccKeySource
     public EccPublicKey GetEccPublicKey()
     {
         return new EccPublicKey(PublicKeyPem);
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            if (Pem != null)
+            {
+                Array.Clear(Pem, 0, Pem.Length);
+            }
+
+            _asymmetricCipherKeyPair = null;
+        }
+
+        _disposed = true;
     }
 }
