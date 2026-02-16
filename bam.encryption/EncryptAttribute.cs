@@ -16,6 +16,9 @@ namespace Bam.Encryption
             this.EncryptionScheme = EncryptionSchemes.Symmetric;
         }
 
+        /// <summary>
+        /// Gets or sets the encryption scheme to use. Defaults to <see cref="EncryptionSchemes.Symmetric"/>.
+        /// </summary>
         public EncryptionSchemes EncryptionScheme { get; set; }
     }
 }

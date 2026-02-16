@@ -2,17 +2,35 @@
 
 namespace Bam.Encryption;
 
+/// <summary>
+/// Provides HMAC keys, generating new random keys or retrieving named keys from the BAM vault file system.
+/// </summary>
 public class HmacKeyProvider : IHmacKeyProvider
 {
     Dictionary<string, byte[]> _hmacKeys = new Dictionary<string, byte[]>();
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="HmacKeyProvider"/> class with a newly generated 32-byte random HMAC key.
+    /// </summary>
     public HmacKeyProvider()
     {
         this.PersistNamedHmacKeys = true;
         this.Key = GetNewHmacKey();
     }
+    /// <summary>
+    /// Gets or sets whether named HMAC keys should be persisted to the BAM vault file system. Defaults to true.
+    /// </summary>
     public bool PersistNamedHmacKeys { get; set; }
+
+    /// <summary>
+    /// Gets or sets the default HMAC key for this provider instance.
+    /// </summary>
     public byte[] Key { get; set; }
-    
+
+    /// <summary>
+    /// Generates a new 32-byte cryptographically secure random HMAC key.
+    /// </summary>
+    /// <returns>A new 32-byte HMAC key.</returns>
     public byte[] GetNewHmacKey()
     {
         byte[] result = new byte[32];

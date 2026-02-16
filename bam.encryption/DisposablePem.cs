@@ -6,12 +6,21 @@ using System.Threading.Tasks;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Abstract base class that holds PEM-encoded key data and securely clears it from memory on disposal.
+    /// </summary>
     public abstract class DisposablePem : IDisposable
     {
         private bool _disposed = false;
 
+        /// <summary>
+        /// Gets or sets the PEM-encoded key data as a byte array.
+        /// </summary>
         public byte[] Pem { get; set; }
 
+        /// <summary>
+        /// Clears the PEM data from memory and releases resources.
+        /// </summary>
         public void Dispose()
         {
             // Dispose of unmanaged resources.

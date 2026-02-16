@@ -13,6 +13,9 @@ namespace Bam.Encryption
     {
         protected static readonly int DefaultSaltLength = 8;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Encrypted"/> class with a randomly generated AES key and IV.
+        /// </summary>
         public Encrypted()
         {
             this.SaltLength = DefaultSaltLength;
@@ -22,11 +25,20 @@ namespace Bam.Encryption
             this.Plain = string.Empty;
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Encrypted"/> class with the specified plain text, generating a random AES key and IV.
+        /// </summary>
+        /// <param name="plainText">The plain text to encrypt.</param>
         public Encrypted(string plainText): this()
         {
             this.Plain = plainText;
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Encrypted"/> class, encrypting the specified plain text using the given AES key.
+        /// </summary>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="key">The AES key to use for encryption.</param>
         public Encrypted(string plainText, AesKey key)//: this(plainText, key.Key, key.IV)
         {
             this.Plain = plainText;
@@ -48,26 +60,41 @@ namespace Bam.Encryption
             return enc.Value;
         }
 
+        /// <summary>
+        /// Gets the Base64-encoded cipher text.
+        /// </summary>
         public virtual string Value => Base64Cipher;
 
+        /// <summary>
+        /// Gets or sets the number of random salt characters appended to the plain text before encryption.
+        /// </summary>
         public int SaltLength
         {
             get;
             set;
         }
 
+        /// <summary>
+        /// Gets or sets the plain text value before encryption.
+        /// </summary>
         public string Plain
         {
             get;
             set;
         }
 
+        /// <summary>
+        /// Gets the encrypted cipher as a byte array.
+        /// </summary>
         public byte[] Cipher
         {
             get;
             private set;
         }
 
+        /// <summary>
+        /// Gets or sets the cipher as a Base64-encoded string. Performs lazy encryption on first access if not yet encrypted.
+        /// </summary>
         public string Base64Cipher
         {
             get

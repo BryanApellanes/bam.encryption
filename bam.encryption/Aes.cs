@@ -6,19 +6,28 @@ using System.Text;
 using System.Security.Cryptography;
 
 namespace Bam.Encryption
-{ 
+{
+    /// <summary>
+    /// Provides static methods for AES encryption and decryption of strings, byte arrays, and objects.
+    /// </summary>
     public static class Aes
     {
         /// <summary>
-        /// Gets a Base64 encoded value representing the cypher of the specified value
+        /// Encrypts the specified value using the system AES key.
         /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
+        /// <param name="value">The plain text value to encrypt.</param>
+        /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string value)
         {
             return Encrypt(value, XmlBase64Aeskey.SystemKey);
         }
 
+        /// <summary>
+        /// Encrypts the specified value using a key and IV derived from the given password.
+        /// </summary>
+        /// <param name="value">The plain text value to encrypt.</param>
+        /// <param name="password">The password used to derive the AES key (SHA256) and IV (MD5).</param>
+        /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string value, string password)
         {
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
@@ -28,6 +37,12 @@ namespace Bam.Encryption
             return Encrypt(value, aesKey.ToBase64(), aesIV.ToBase64());
         }
 
+        /// <summary>
+        /// Decrypts the specified value using a key and IV derived from the given password.
+        /// </summary>
+        /// <param name="value">The Base64-encoded cipher text to decrypt.</param>
+        /// <param name="password">The password used to derive the AES key (SHA256) and IV (MD5).</param>
+        /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(string value, string password)
         {
             byte[] passwordBytes = Encoding.UTF8.GetBytes(password);
@@ -38,17 +53,23 @@ namespace Bam.Encryption
         }
         
         /// <summary>
-        /// Gets a Base64 encoded value representing the cypher of the specified
-        /// value using the specified key.
+        /// Encrypts the specified value using the provided AES key.
         /// </summary>
-        /// <param name="value"></param>
-        /// <param name="key"></param>
-        /// <returns></returns>
+        /// <param name="value">The plain text value to encrypt.</param>
+        /// <param name="key">The AES key containing the key and IV to use for encryption.</param>
+        /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string value, AesKey key)
         {
             return Encrypt(value, key.Key, key.IV);
         }
 
+        /// <summary>
+        /// Encrypts the specified plain text using the provided raw AES key and IV bytes.
+        /// </summary>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
+        /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string plainText, byte[] key, byte[] iv)
         {
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
@@ -62,12 +83,12 @@ namespace Bam.Encryption
         }
 
         /// <summary>
-        /// Encrypts the specified value.
+        /// Encrypts the specified plain text using Base64-encoded AES key and IV.
         /// </summary>
-        /// <param name="plainText">The value.</param>
-        /// <param name="base64EncodedKey">The base64 encoded key.</param>
-        /// <param name="base64EncodedIV">The base64 encoded iv.</param>
-        /// <returns>Base64 encoded encrypted value</returns>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="base64EncodedKey">The Base64-encoded AES key.</param>
+        /// <param name="base64EncodedIV">The Base64-encoded initialization vector.</param>
+        /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string plainText, string base64EncodedKey, string base64EncodedIV)
         {
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
@@ -81,6 +102,12 @@ namespace Bam.Encryption
             return Convert.ToBase64String(encryptedBytes);
         }
 
+        /// <summary>
+        /// Encrypts the specified plain text using the provided crypto transform.
+        /// </summary>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="encryptor">The cryptographic transform used for encryption.</param>
+        /// <returns>The encrypted byte array.</returns>
         public static byte[] Encrypt(string plainText, ICryptoTransform encryptor)
         {
             using (MemoryStream encryptBuffer = new MemoryStream())
@@ -95,6 +122,13 @@ namespace Bam.Encryption
             }
         }
 
+        /// <summary>
+        /// Encrypts the specified byte array using the provided raw AES key and IV bytes.
+        /// </summary>
+        /// <param name="plainData">The data to encrypt.</param>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
+        /// <returns>The encrypted byte array.</returns>
         public static byte[] EncryptBytes(byte[] plainData, byte[] key, byte[] iv)
         {
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
@@ -106,6 +140,13 @@ namespace Bam.Encryption
             return EncryptBytes(plainData, encryptor);
         }
 
+        /// <summary>
+        /// Encrypts the specified byte array using Base64-encoded AES key and IV.
+        /// </summary>
+        /// <param name="plainData">The data to encrypt.</param>
+        /// <param name="base64EncodedKey">The Base64-encoded AES key.</param>
+        /// <param name="base64EncodedIV">The Base64-encoded initialization vector.</param>
+        /// <returns>The encrypted byte array.</returns>
         public static byte[] EncryptBytes(byte[] plainData, string base64EncodedKey, string base64EncodedIV)
         {
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
@@ -118,6 +159,12 @@ namespace Bam.Encryption
             return EncryptBytes(plainData, encryptor);            
         }
 
+        /// <summary>
+        /// Encrypts the specified byte array using the provided crypto transform.
+        /// </summary>
+        /// <param name="plainData">The data to encrypt.</param>
+        /// <param name="encryptor">The cryptographic transform used for encryption.</param>
+        /// <returns>The encrypted byte array.</returns>
         public static byte[] EncryptBytes(byte[] plainData, ICryptoTransform encryptor)
         {
             using (MemoryStream encryptBuffer = new MemoryStream())
@@ -132,26 +179,34 @@ namespace Bam.Encryption
         }
 
         /// <summary>
-        /// Decrypts the specified base64 encoded value.
+        /// Decrypts the specified Base64-encoded cipher using the system AES key.
         /// </summary>
-        /// <param name="base64EncodedValue">The base64 encoded value.</param>
-        /// <returns></returns>
+        /// <param name="base64EncodedValue">The Base64-encoded cipher text to decrypt.</param>
+        /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(string base64EncodedValue)
         {
             return Decrypt(base64EncodedValue, XmlBase64Aeskey.SystemKey);
         }
 
         /// <summary>
-        /// Decrypts the specified base64 encoded value.
+        /// Decrypts the specified Base64-encoded cipher using the provided AES key.
         /// </summary>
-        /// <param name="base64EncodedCipher">The base64 encoded cipher.</param>
-        /// <param name="key">The key.</param>
-        /// <returns></returns>
+        /// <param name="base64EncodedCipher">The Base64-encoded cipher text to decrypt.</param>
+        /// <param name="key">The AES key containing the key and IV to use for decryption.</param>
+        /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(string base64EncodedCipher, AesKey key)
         {
             return Decrypt(base64EncodedCipher, key.Key, key.IV);
         }
 
+        /// <summary>
+        /// Decrypts the specified Base64-encoded cipher using the provided raw AES key and IV bytes.
+        /// </summary>
+        /// <param name="base64EncodedCipher">The Base64-encoded cipher text to decrypt.</param>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
+        /// <param name="encoding">The text encoding to use for the decrypted result. Defaults to UTF-8.</param>
+        /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(string base64EncodedCipher, byte[] key, byte[] iv, Encoding? encoding = null)
         {
             byte[] encData = Convert.FromBase64String(base64EncodedCipher);
@@ -159,12 +214,27 @@ namespace Bam.Encryption
             return (encoding ?? Encoding.UTF8).GetString(retBytes);
         }
 
+        /// <summary>
+        /// Decrypts the specified cipher byte array using the provided raw AES key and IV bytes.
+        /// </summary>
+        /// <param name="cipher">The encrypted byte array to decrypt.</param>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
+        /// <param name="encoding">The text encoding to use for the decrypted result. Defaults to UTF-8.</param>
+        /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(byte[] cipher, byte[] key, byte[] iv, Encoding? encoding = null)
         {
             byte[] retBytes = DecryptBytes(cipher, key, iv);
             return (encoding ?? Encoding.UTF8).GetString(retBytes);
         }
 
+        /// <summary>
+        /// Decrypts the specified cipher byte array using the provided raw AES key and IV bytes.
+        /// </summary>
+        /// <param name="cipher">The encrypted byte array to decrypt.</param>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
+        /// <returns>The decrypted byte array.</returns>
         public static byte[] DecryptBytes(byte[] cipher, byte[] key, byte[] iv)
         {
             System.Security.Cryptography.Aes aes = System.Security.Cryptography.Aes.Create();
@@ -185,30 +255,36 @@ namespace Bam.Encryption
         }
 
         /// <summary>
-        /// Encrypts the specified target after converting to xml writing it to the specified 
-        /// file path.
+        /// Encrypts the specified object as XML and writes it to the specified file path, saving the AES key to a .key file alongside it.
         /// </summary>
-        /// <param name="target">The target.</param>
-        /// <param name="filePath">The file path.</param>
-        /// <returns></returns>
+        /// <param name="target">The object to serialize and encrypt.</param>
+        /// <param name="filePath">The file path to write the encrypted data to.</param>
+        /// <returns>The AES key used for encryption.</returns>
         public static AesKey Encrypt(this object target, string filePath)
         {
             return Encrypt(target, filePath, filePath + ".key", true);
         }
 
         /// <summary>
-        /// Encrypts the specified target using the specified key file after converting to xml, then writes it to the specified 
-        /// file path.
+        /// Encrypts the specified object as XML and writes it to the specified file path, saving the AES key to the specified key file path.
         /// </summary>
-        /// <param name="target">The target.</param>
-        /// <param name="filePath">The file path.</param>
-        /// <param name="keyFilePath">The key file path.</param>
-        /// <returns></returns>
+        /// <param name="target">The object to serialize and encrypt.</param>
+        /// <param name="filePath">The file path to write the encrypted data to.</param>
+        /// <param name="keyFilePath">The file path to save the AES key to.</param>
+        /// <returns>The AES key used for encryption.</returns>
         public static AesKey Encrypt(this object target, string filePath, string keyFilePath)
         {
             return Encrypt(target, filePath, keyFilePath, true);
         }
 
+        /// <summary>
+        /// Encrypts the specified object as XML and writes it to the specified file path, optionally saving the AES key to a file.
+        /// </summary>
+        /// <param name="target">The object to serialize and encrypt.</param>
+        /// <param name="filePath">The file path to write the encrypted data to.</param>
+        /// <param name="keyFilePath">The file path to save the AES key to.</param>
+        /// <param name="writeKeyFile">If true, writes the AES key to the key file path.</param>
+        /// <returns>The AES key used for encryption.</returns>
         public static AesKey Encrypt(this object target, string filePath, string keyFilePath, bool writeKeyFile)
         {
             string text = ToBase64EncodedEncryptedXml(target, out XmlBase64Aeskey key);
@@ -224,6 +300,12 @@ namespace Bam.Encryption
             return key;
         }
 
+        /// <summary>
+        /// Decrypts and deserializes an object from the specified file, loading the AES key from a .key file alongside it.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize the decrypted XML into.</typeparam>
+        /// <param name="filePath">The file path containing the encrypted data.</param>
+        /// <returns>The deserialized object.</returns>
         public static T Decrypt<T>(string filePath)
         {
             FileInfo info = new FileInfo(filePath);
@@ -231,6 +313,13 @@ namespace Bam.Encryption
             return Decrypt<T>(filePath, keyFile);
         }
 
+        /// <summary>
+        /// Decrypts and deserializes an object from the specified file using the AES key loaded from the specified key file.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize the decrypted XML into.</typeparam>
+        /// <param name="filePath">The file path containing the encrypted data.</param>
+        /// <param name="keyFile">The file path containing the AES key.</param>
+        /// <returns>The deserialized object.</returns>
         public static T Decrypt<T>(string filePath, string keyFile)
         {
             if (!File.Exists(filePath))
@@ -248,6 +337,13 @@ namespace Bam.Encryption
             return Decrypt<T>(filePath, key);
         }
 
+        /// <summary>
+        /// Decrypts and deserializes an object from the specified file using the provided AES key.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize the decrypted XML into.</typeparam>
+        /// <param name="filePath">The file path containing the encrypted data.</param>
+        /// <param name="key">The AES key to use for decryption.</param>
+        /// <returns>The deserialized object.</returns>
         public static T Decrypt<T>(string filePath, AesKey key)
         {
             string text;
