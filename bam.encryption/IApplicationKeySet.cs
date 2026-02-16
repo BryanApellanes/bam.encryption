@@ -1,5 +1,8 @@
 ﻿namespace Bam.Encryption
 {
+    /// <summary>
+    /// Defines a key set associated with a specific application.
+    /// </summary>
     public interface IApplicationKeySet
     {
         /// <summary>

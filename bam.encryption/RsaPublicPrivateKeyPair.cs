@@ -3,8 +3,16 @@ using System.Text;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Represents an RSA public-private key pair that supports encryption, decryption, and PEM serialization.
+    /// </summary>
     public class RsaPublicPrivateKeyPair : DisposablePem, IRsaKeySource
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RsaPublicPrivateKeyPair"/> class, generating a new RSA key pair with the specified key length.
+        /// </summary>
+        /// <param name="rsaKeyLength">The RSA key length to use; defaults to 4096 bits.</param>
+        /// <param name="encoding">The encoding to use for PEM conversion; defaults to UTF-8 if null.</param>
         public RsaPublicPrivateKeyPair(RsaKeyLength rsaKeyLength = RsaKeyLength._4096, Encoding? encoding = null)
         {
             this.RsaKeyLength = rsaKeyLength;
@@ -13,6 +21,11 @@ namespace Bam.Encryption
             this.PublicKeyPem = AsymmetricCipherKeyPair.PublicKeyToPem();
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RsaPublicPrivateKeyPair"/> class from PEM-encoded private key bytes.
+        /// </summary>
+        /// <param name="pemBytes">The PEM-encoded private key bytes.</param>
+        /// <param name="encoding">The encoding to use for PEM conversion; defaults to UTF-8 if null.</param>
         public RsaPublicPrivateKeyPair(byte[] pemBytes, Encoding? encoding = null)
         {
             this.RsaKeyLength = RsaKeyLength.Unkown;
@@ -28,6 +41,9 @@ namespace Bam.Encryption
             set => _asymmetricCipherKeyPair = value;
         }
 
+        /// <summary>
+        /// Gets or sets the RSA key length used to generate this key pair.
+        /// </summary>
         public RsaKeyLength RsaKeyLength { get; set; }
 
         /// <summary>
@@ -103,16 +119,28 @@ namespace Bam.Encryption
             return cipherBytes.DecryptWithPrivateKey(AsymmetricCipherKeyPair.Private, engine);
         }
 
+        /// <summary>
+        /// Gets the underlying BouncyCastle asymmetric cipher key pair.
+        /// </summary>
+        /// <returns>The asymmetric cipher key pair.</returns>
         public AsymmetricCipherKeyPair GetAsymmetricCipherKeyPair()
         {
             return AsymmetricCipherKeyPair;
         }
         
+        /// <summary>
+        /// Gets the RSA public key from this key pair.
+        /// </summary>
+        /// <returns>A new <see cref="RsaPublicKey"/> instance containing the public key.</returns>
         public RsaPublicKey GetRsaPublicKey()
         {
             return new RsaPublicKey(PublicKeyPem);
         }
 
+        /// <summary>
+        /// Returns this instance as the RSA key pair.
+        /// </summary>
+        /// <returns>This <see cref="RsaPublicPrivateKeyPair"/> instance.</returns>
         public RsaPublicPrivateKeyPair GetRsaKey()
         {
             return this;

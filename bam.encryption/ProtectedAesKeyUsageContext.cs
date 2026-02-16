@@ -15,6 +15,10 @@ namespace Bam.Encryption
         bool _disposed = false;
         AesKey _ephemeralKey;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ProtectedAesKeyUsageContext"/> class, encrypting the key material in memory and zeroing the original.
+        /// </summary>
+        /// <param name="key">The AES key to protect. The key and IV bytes will be zeroed after construction.</param>
         public ProtectedAesKeyUsageContext(AesKey key)
         {
             _ephemeralKey = new AesKey();
@@ -24,6 +28,10 @@ namespace Bam.Encryption
             Array.Clear(key.IV, 0, key.IV.Length);
         }
 
+        /// <summary>
+        /// Executes the specified action with temporary access to the decrypted AES key.
+        /// </summary>
+        /// <param name="action">The action to execute with the decrypted key.</param>
         public void UseKey(Action<AesKey> action)
         {
             byte[] keyBytes = _ephemeralKey.DecryptBytes(_keyCipher);
@@ -34,6 +42,12 @@ namespace Bam.Encryption
             }
         }
 
+        /// <summary>
+        /// Executes the specified function with temporary access to the decrypted AES key and returns the result.
+        /// </summary>
+        /// <typeparam name="T">The type of value returned by the function.</typeparam>
+        /// <param name="func">The function to execute with the decrypted key.</param>
+        /// <returns>The value returned by the function.</returns>
         public T UseKey<T>(Func<AesKey, T> func)
         {
             byte[] keyBytes = _ephemeralKey.DecryptBytes(_keyCipher);
@@ -44,6 +58,7 @@ namespace Bam.Encryption
             }
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
             Dispose(true);

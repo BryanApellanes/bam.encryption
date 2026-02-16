@@ -2,8 +2,16 @@
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Encrypts typed data using RSA asymmetric encryption as a value transformer pipeline.
+    /// </summary>
+    /// <typeparam name="TData">The type of data to encrypt.</typeparam>
     public class RsaAsymmetricDataEncryptor<TData> : ValueTransformerPipeline<TData>, IEncryptor<TData>
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RsaAsymmetricDataEncryptor{TData}"/> class with the specified RSA public key source.
+        /// </summary>
+        /// <param name="rsaPublicKeySource">The source of the RSA public key for encryption.</param>
         public RsaAsymmetricDataEncryptor(IRsaPublicKeySource rsaPublicKeySource)
         {
             this.RsaByteTransformer = new RsaByteTransformer(rsaPublicKeySource);
@@ -11,6 +19,10 @@ namespace Bam.Encryption
             this.Add(this.RsaByteTransformer);
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RsaAsymmetricDataEncryptor{TData}"/> class with the specified RSA key pair.
+        /// </summary>
+        /// <param name="rsaPublicPrivateKeyPair">The RSA key pair whose public key is used for encryption.</param>
         public RsaAsymmetricDataEncryptor(RsaPublicPrivateKeyPair rsaPublicPrivateKeyPair)
         {
             this.RsaByteTransformer = new RsaByteTransformer(rsaPublicPrivateKeyPair);
@@ -20,6 +32,10 @@ namespace Bam.Encryption
 
         protected internal RsaByteTransformer RsaByteTransformer { get; private set; }
 
+        /// <summary>
+        /// Gets a reverse transformer that can decrypt data encrypted by this encryptor.
+        /// </summary>
+        /// <returns>A new RSA asymmetric data decryptor.</returns>
         public new RsaAsymmetricDataDecryptor<TData> GetReverseTransformer()
         {
             return new RsaAsymmetricDataDecryptor<TData>(this);
@@ -35,11 +51,13 @@ namespace Bam.Encryption
             return Transform(data);
         }
 
+        /// <inheritdoc />
         public IDecryptor<TData> GetDecryptor()
         {
             return GetReverseTransformer();
         }
 
+        /// <inheritdoc />
         IDecryptor IEncryptor.GetDecryptor()
         {
             return GetDecryptor();
@@ -58,6 +76,7 @@ namespace Bam.Encryption
             return cipherData.ToBase64();
         }
 
+        /// <inheritdoc />
         public byte[] Encrypt(byte[] plainData)
         {
             return RsaByteTransformer.Transform(plainData);

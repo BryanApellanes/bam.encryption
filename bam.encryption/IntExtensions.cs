@@ -7,9 +7,16 @@ using System.Threading.Tasks;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Provides cryptographically secure random string generation extension methods for integers.
+    /// </summary>
     public static class IntExtensions
     {
-
+        /// <summary>
+        /// Generates a cryptographically secure random alphanumeric string of the specified length.
+        /// </summary>
+        /// <param name="length">The number of characters in the generated string.</param>
+        /// <returns>A random alphanumeric string of the specified length.</returns>
         public static string SecureAlphaNumericCharacters(this int length)
         {
             SecureRandom rng = new SecureRandom();

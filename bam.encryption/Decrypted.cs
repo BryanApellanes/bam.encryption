@@ -41,6 +41,10 @@ namespace Bam.Encryption
         {
         }
 
+        /// <summary>
+        /// Implicitly converts a <see cref="Decrypted"/> instance to its decrypted plain text string.
+        /// </summary>
+        /// <param name="dec">The decrypted instance.</param>
         public static implicit operator string(Decrypted dec)
         {
             return dec.Value;

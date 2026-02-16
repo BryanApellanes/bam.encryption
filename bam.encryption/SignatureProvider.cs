@@ -4,10 +4,12 @@ using Org.BouncyCastle.Security;
 
 namespace Bam.Encryption;
 
+/// <summary>
+/// Abstract base class that creates and verifies digital signatures using BouncyCastle signers.
+/// </summary>
 public abstract class SignatureProvider : ISignatureProvider
 {
-
-
+    /// <inheritdoc />
     public ISignature Sign(IPrivateKeyProvider privateKeySource, string data, string algorithm = "SHA512WITHRSA")
     {
         ISigner signer = SignerUtilities.GetSigner(algorithm);
@@ -24,6 +26,7 @@ public abstract class SignatureProvider : ISignatureProvider
         };
     }
 
+    /// <inheritdoc />
     public ISignatureVerification VerifySignature(ISignature signature, IPublicKey issuerPublicKey)
     {
         try

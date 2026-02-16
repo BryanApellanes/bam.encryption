@@ -22,19 +22,32 @@ namespace Bam.Encryption
             this.Encrypt(password);
         }
 
+        /// <summary>
+        /// Implicitly converts a <see cref="PasswordEncrypted"/> to its cipher text string.
+        /// </summary>
+        /// <param name="p">The password-encrypted instance.</param>
         public static implicit operator string(PasswordEncrypted p)
         {
             return p.Cipher;
         }
 
+        /// <summary>
+        /// Gets the current value, which is the cipher text for this class.
+        /// </summary>
         public virtual string Value => Cipher;
 
+        /// <summary>
+        /// Gets the original plain text data.
+        /// </summary>
         public string Data
         {
             get;
             protected set;
         }
 
+        /// <summary>
+        /// Gets the encrypted cipher text.
+        /// </summary>
         public string Cipher
         {
             get;
@@ -48,6 +61,11 @@ namespace Bam.Encryption
             set => Encrypt(value);
         }
 
+        /// <summary>
+        /// Encrypts the data using the specified password and returns the cipher text.
+        /// </summary>
+        /// <param name="password">The password to use for encryption.</param>
+        /// <returns>The encrypted cipher text.</returns>
         public string Encrypt(string password)
         {
             _password = password;

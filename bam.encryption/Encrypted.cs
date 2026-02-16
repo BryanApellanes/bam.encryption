@@ -55,6 +55,10 @@ namespace Bam.Encryption
             this.IV = iv;
         }
 
+        /// <summary>
+        /// Implicitly converts an <see cref="Encrypted"/> instance to its Base64-encoded cipher string.
+        /// </summary>
+        /// <param name="enc">The encrypted instance.</param>
         public static implicit operator string(Encrypted enc)
         {
             return enc.Value;

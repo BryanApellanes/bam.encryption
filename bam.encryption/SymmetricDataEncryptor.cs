@@ -3,12 +3,24 @@ using Bam.Storage;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Encrypts typed data using AES symmetric encryption as a value transformer pipeline.
+    /// </summary>
+    /// <typeparam name="TData">The type of data to encrypt.</typeparam>
     public class SymmetricDataEncryptor<TData> : ValueTransformerPipeline<TData>, IEncryptor<TData>
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SymmetricDataEncryptor{TData}"/> class with the specified AES key source factory.
+        /// </summary>
+        /// <param name="aesKeySource">A function that provides the AES key source.</param>
         public SymmetricDataEncryptor(Func<IAesKeySource> aesKeySource) : this(aesKeySource())
         {
         }
-        
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SymmetricDataEncryptor{TData}"/> class with the specified AES key source.
+        /// </summary>
+        /// <param name="aesKeySource">The source of the AES key for encryption.</param>
         public SymmetricDataEncryptor(IAesKeySource aesKeySource)
         {
             this.AesByteTransformer = new AesByteTransformer(aesKeySource);
@@ -18,6 +30,10 @@ namespace Bam.Encryption
 
         protected internal AesByteTransformer AesByteTransformer { get; private set; }
 
+        /// <summary>
+        /// Gets a reverse transformer that can decrypt data encrypted by this encryptor.
+        /// </summary>
+        /// <returns>A new symmetric data decryptor.</returns>
         public new SymmetricDataDecryptor<TData> GetReverseTransformer()
         {
             return new SymmetricDataDecryptor<TData>(this);
@@ -37,11 +53,13 @@ namespace Bam.Encryption
             return cipher;
         }
 
+        /// <inheritdoc />
         public IDecryptor<TData> GetDecryptor()
         {
             return GetReverseTransformer();
         }
 
+        /// <inheritdoc />
         IDecryptor IEncryptor.GetDecryptor()
         {
             return GetDecryptor();

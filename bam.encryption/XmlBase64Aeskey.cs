@@ -2,6 +2,9 @@
 
 namespace Bam.Encryption;
 
+/// <summary>
+/// An AES key that supports XML Base64 file serialization. Use <see cref="AesKey"/> instead.
+/// </summary>
 [Obsolete("Use AesKey instead")]
 public class XmlBase64Aeskey : AesKey
 {
@@ -36,6 +39,10 @@ public class XmlBase64Aeskey : AesKey
         }
     }
     
+    /// <summary>
+    /// Saves this AES key to the specified file path as XML encoded in Base64.
+    /// </summary>
+    /// <param name="filePath">The file path to save the key to.</param>
     public void SaveXmlBase64(string filePath)
     {
         FileInfo fileInfo = new FileInfo(filePath);
@@ -50,6 +57,11 @@ public class XmlBase64Aeskey : AesKey
         sw.Write(xmlBase64);
     }
     
+    /// <summary>
+    /// Loads an AES key from the specified XML Base64-encoded file.
+    /// </summary>
+    /// <param name="filePath">The file path to load the key from.</param>
+    /// <returns>The deserialized AES key.</returns>
     public static XmlBase64Aeskey LoadXmlBase64(string filePath)
     {
         using (StreamReader sr = new StreamReader(filePath))

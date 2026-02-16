@@ -1,5 +1,8 @@
 ﻿namespace Bam.Encryption
 {
+    /// <summary>
+    /// Defines an AES key exchange, where the client encrypts an AES key with the server's RSA public key.
+    /// </summary>
     [Obsolete("Use EccPublicPrivateKeyPair for this purpose")]
     public interface IAesKeyExchange
     {

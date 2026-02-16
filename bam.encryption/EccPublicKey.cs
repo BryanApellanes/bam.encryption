@@ -44,6 +44,10 @@ public class EccPublicKey : PublicKey
     /// </summary>
     public new ECPublicKeyParameters Value { get; set; }
 
+    /// <summary>
+    /// Implicitly converts an <see cref="EccPublicKey"/> to its PEM-encoded string representation.
+    /// </summary>
+    /// <param name="eccPublicKey">The ECC public key to convert.</param>
     public static implicit operator string(EccPublicKey eccPublicKey)
     {
         return eccPublicKey.Value.ToPem();

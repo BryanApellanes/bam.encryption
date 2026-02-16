@@ -6,11 +6,19 @@
     /// <typeparam name="TContent">The type of content that was encrypted.</typeparam>
     public abstract class ContentCipher<TContent> : Cipher<TContent>, IContentCipher
     {
+        /// <summary>
+        /// Implicitly converts a <see cref="ContentCipher{TContent}"/> to its raw byte array.
+        /// </summary>
+        /// <param name="cipher">The cipher to convert.</param>
         public static implicit operator byte[](ContentCipher<TContent> cipher)
         {
             return cipher.Data;
         }
 
+        /// <summary>
+        /// Implicitly converts a <see cref="ContentCipher{TContent}"/> to a Base64-encoded string.
+        /// </summary>
+        /// <param name="cipher">The cipher to convert.</param>
         public static implicit operator string(ContentCipher<TContent> cipher)
         {
             return cipher.Data.ToBase64();

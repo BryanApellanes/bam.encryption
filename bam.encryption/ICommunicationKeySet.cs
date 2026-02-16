@@ -1,5 +1,8 @@
 ﻿namespace Bam.Encryption
 {
+    /// <summary>
+    /// Defines a key set used for server-client communication, identified by server and client hostnames.
+    /// </summary>
     public interface ICommunicationKeySet
     {
         /// <summary>

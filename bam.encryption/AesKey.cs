@@ -12,24 +12,40 @@ namespace Bam.Encryption
     [Serializable]
     public class AesKey : DisposableAesKey, IAesKeySource
     {
+        /// <summary>
+        /// The file name used for the system-wide AES key.
+        /// </summary>
         public const string SystemKeyFileName = "aes.sys";
 
         static AesKey()
         {
             SetSystemKey();
         }
-        
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AesKey"/> class, generating a random key and IV.
+        /// </summary>
         public AesKey()
         {
             SetKeyAndIv();
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AesKey"/> class from Base64-encoded key and IV strings.
+        /// </summary>
+        /// <param name="base64EncodedKey">The Base64-encoded AES key.</param>
+        /// <param name="base64EncodedIV">The Base64-encoded initialization vector.</param>
         public AesKey(string base64EncodedKey, string base64EncodedIV)
         {
             this.Key = base64EncodedKey.FromBase64();
             this.IV = base64EncodedIV.FromBase64();
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AesKey"/> class from raw key and IV byte arrays.
+        /// </summary>
+        /// <param name="key">The raw AES key bytes.</param>
+        /// <param name="iv">The raw initialization vector bytes.</param>
         public AesKey(byte[] key, byte[] iv)
         {
             this.Key = key;
@@ -52,6 +68,9 @@ namespace Bam.Encryption
         
         private static AesKey _systemKey;
         private static object _systemKeyLock = new object();
+        /// <summary>
+        /// Gets the system-wide AES key, loading or creating it from disk as needed.
+        /// </summary>
         public static AesKey SystemKey
         {
             get
@@ -84,6 +103,10 @@ namespace Bam.Encryption
             return _systemKey;
         }
 
+        /// <summary>
+        /// Rotates the system key by backing up the current key file and generating a new one.
+        /// </summary>
+        /// <returns>The new system AES key.</returns>
         public static AesKey Next()
         {
             if (_systemKey == null)
@@ -130,16 +153,30 @@ namespace Bam.Encryption
             return Aes.Decrypt(base64EncodedCipher, this);
         }
 
+        /// <summary>
+        /// Encrypts the specified byte array using this key.
+        /// </summary>
+        /// <param name="data">The data to encrypt.</param>
+        /// <returns>The encrypted byte array.</returns>
         public byte[] EncryptBytes(byte[] data)
         {
             return Aes.EncryptBytes(data, this.Key, this.IV);
         }
 
+        /// <summary>
+        /// Decrypts the specified cipher byte array using this key.
+        /// </summary>
+        /// <param name="cipherData">The encrypted byte array to decrypt.</param>
+        /// <returns>The decrypted byte array.</returns>
         public byte[] DecryptBytes(byte[] cipherData)
         {
             return Aes.DecryptBytes(cipherData, this.Key, this.IV);
         }
 
+        /// <summary>
+        /// Returns this instance as the AES key.
+        /// </summary>
+        /// <returns>This <see cref="AesKey"/> instance.</returns>
         public AesKey GetAesKey()
         {
             return this;

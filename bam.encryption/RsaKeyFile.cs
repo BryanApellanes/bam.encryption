@@ -8,8 +8,14 @@ using Bam.Configuration;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Manages RSA key pairs stored as XML files on disk, providing encryption and decryption using .NET RSACryptoServiceProvider.
+    /// </summary>
     public class RsaKeyFile
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RsaKeyFile"/> class, generating a new RSA key pair.
+        /// </summary>
         public RsaKeyFile()
         {
             RSACryptoServiceProvider initial = CreateRSACryptoServiceProvider(Rsa.DefaultKeySize);
@@ -19,6 +25,9 @@ namespace Bam.Encryption
         
         static object _defaultLock = new object();
         static RsaKeyFile _rsaKeyPair;
+        /// <summary>
+        /// Gets the default RSA key file, loading from disk or creating a new one if needed.
+        /// </summary>
         public static RsaKeyFile Default
         {
             get
@@ -59,14 +68,30 @@ namespace Bam.Encryption
             return File.Exists(filePath);
         }
 
+        /// <summary>
+        /// Gets or sets the XML-encoded public key.
+        /// </summary>
         public string PublicKeyXml { get; set; }
+
+        /// <summary>
+        /// Gets or sets the XML-encoded private key.
+        /// </summary>
         public string PrivateKeyXml { get; set; }
-        
+
+        /// <summary>
+        /// Saves the key pair files to the process data folder with the specified file name.
+        /// </summary>
+        /// <param name="fileName">The base file name (without extension) for the key files.</param>
         public void Save(string fileName)
         {
             Save(RuntimeSettings.ProcessDataFolder, fileName);
         }
 
+        /// <summary>
+        /// Saves the key pair as .pub and .priv files in the specified directory.
+        /// </summary>
+        /// <param name="directory">The directory to save the key files to.</param>
+        /// <param name="fileName">The base file name (without extension) for the key files.</param>
         public void Save(string directory, string fileName)
         {
             if (!Directory.Exists(directory))
@@ -87,11 +112,22 @@ namespace Bam.Encryption
             }
         }
 
+        /// <summary>
+        /// Loads an RSA key file from the current directory with the specified file name.
+        /// </summary>
+        /// <param name="fileName">The base file name (without extension) of the key files.</param>
+        /// <returns>The loaded RSA key file.</returns>
         public static RsaKeyFile Load(string fileName)
         {
             return Load(".", fileName);
         }
 
+        /// <summary>
+        /// Loads an RSA key file from the specified directory with the specified file name.
+        /// </summary>
+        /// <param name="directory">The directory containing the key files.</param>
+        /// <param name="fileName">The base file name (without extension) of the key files.</param>
+        /// <returns>The loaded RSA key file.</returns>
         public static RsaKeyFile Load(string directory, string fileName)
         {
             RsaKeyFile result = new RsaKeyFile();
@@ -122,6 +158,9 @@ namespace Bam.Encryption
             keys.PrivateKeyXml = File.ReadAllText(filePath);
         }
 
+        /// <summary>
+        /// Gets an RSACryptoServiceProvider initialized with the public key.
+        /// </summary>
         public RSACryptoServiceProvider PublicKey
         {
             get
@@ -133,6 +172,9 @@ namespace Bam.Encryption
         }
 
 
+        /// <summary>
+        /// Gets an RSACryptoServiceProvider initialized with the private key.
+        /// </summary>
         public RSACryptoServiceProvider PrivateKey
         {
             get
@@ -143,11 +185,21 @@ namespace Bam.Encryption
             }
         }
 
+        /// <summary>
+        /// Encrypts the specified value using the public key.
+        /// </summary>
+        /// <param name="value">The plain text to encrypt.</param>
+        /// <returns>The Base64-encoded cipher text.</returns>
         public string EncryptWithPublicKey(string value)
         {
             return Encrypt(value, PublicKey, Encoding.UTF8);
         }
 
+        /// <summary>
+        /// Decrypts the specified Base64-encoded cipher text using the private key.
+        /// </summary>
+        /// <param name="base64EncodedCipher">The Base64-encoded cipher text to decrypt.</param>
+        /// <returns>The decrypted plain text.</returns>
         public string DecryptWithPrivateKey(string base64EncodedCipher)
         {
             return Decrypt(base64EncodedCipher, PrivateKey, Encoding.UTF8);

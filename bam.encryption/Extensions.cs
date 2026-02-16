@@ -38,6 +38,12 @@ namespace Bam.Encryption
             return new PasswordDecrypted(cipher, password);            
         }
         
+        /// <summary>
+        /// Generates an RSA key pair of the specified key length.
+        /// </summary>
+        /// <param name="size">The RSA key length.</param>
+        /// <param name="secureRandomAlgorithm">The secure random algorithm to use. Defaults to "SHA1PRNG".</param>
+        /// <returns>A new RSA asymmetric cipher key pair.</returns>
         public static AsymmetricCipherKeyPair RsaKeyPair(this RsaKeyLength size, string secureRandomAlgorithm = "SHA1PRNG")
         {
             return RsaKeyPair((int)size, secureRandomAlgorithm);
@@ -64,25 +70,25 @@ namespace Bam.Encryption
         }*/
         
         /// <summary>
-        /// Gets a base 64 encoded asymmetric cipher of the specified input.
+        /// Gets a Base64-encoded asymmetric cipher of the specified input using the given PEM public key.
         /// </summary>
-        /// <param name="input"></param>
-        /// <param name="publicPemKey"></param>
-        /// <param name="encoding"></param>
-        /// <returns></returns>
+        /// <param name="input">The plain text to encrypt.</param>
+        /// <param name="publicPemKey">The PEM-encoded public key string.</param>
+        /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
+        /// <returns>The encrypted cipher text as a Base64 string.</returns>
         public static string EncryptWithPublicKey(this string input, string publicPemKey, Encoding encoding = null)
         {
             return EncryptWithPublicKey(input, publicPemKey.PemToKey(), encoding);
         }
         
         /// <summary>
-        /// Gets a base 64 encoded asymmetric cipher of the specified plain text input.
+        /// Gets a Base64-encoded asymmetric cipher of the specified plain text input using the given public key.
         /// </summary>
-        /// <param name="plainText"></param>
-        /// <param name="key"></param>
-        /// <param name="encoding"></param>
-        /// <param name="engine"></param>
-        /// <returns></returns>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="key">The asymmetric public key to encrypt with.</param>
+        /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
+        /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
+        /// <returns>The encrypted cipher text as a Base64 string.</returns>
         public static string EncryptWithPublicKey(this string plainText, AsymmetricKeyParameter key, Encoding encoding = null, IAsymmetricBlockCipher engine = null)
         {
             byte[] encrypted = GetPublicKeyEncryptedBytes(plainText, key, encoding, engine);
@@ -209,12 +215,12 @@ namespace Bam.Encryption
         }
 
         /// <summary>
-        /// Encrypt with the Public key of the specified keyPair
+        /// Encrypts the specified plain text using the public key from the given key pair.
         /// </summary>
-        /// <param name="plainText"></param>
-        /// <param name="keyPair"></param>
-        /// <param name="encoding"></param>
-        /// <returns></returns>
+        /// <param name="plainText">The plain text to encrypt.</param>
+        /// <param name="keyPair">The asymmetric key pair containing the public key.</param>
+        /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
+        /// <returns>The encrypted cipher text as a Base64 string.</returns>
         public static string EncryptWithPublicKey(this string plainText, AsymmetricCipherKeyPair keyPair, Encoding encoding = null)
         {
             if (encoding == null)

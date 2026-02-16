@@ -6,13 +6,26 @@ using System.Threading.Tasks;
 
 namespace Bam.Encryption
 {
+    /// <summary>
+    /// Abstract base class for AES keys that securely clears key material from memory on disposal.
+    /// </summary>
     public abstract class DisposableAesKey : IDisposable
     {
         private bool _disposed = false;
 
+        /// <summary>
+        /// Gets or sets the raw AES key bytes.
+        /// </summary>
         public virtual byte[] Key { get; set; }
+
+        /// <summary>
+        /// Gets or sets the raw initialization vector bytes.
+        /// </summary>
         public virtual byte[] IV { get; set; }
 
+        /// <summary>
+        /// Securely clears the key and IV from memory and releases resources.
+        /// </summary>
         public void Dispose()
         {
             // Dispose of unmanaged resources.
