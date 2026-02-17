@@ -55,7 +55,7 @@
                 {
                     return _encrypted[key];
                 }
-                return null;
+                return null!;
             }
             set
             {

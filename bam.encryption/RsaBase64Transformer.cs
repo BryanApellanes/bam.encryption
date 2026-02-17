@@ -58,7 +58,7 @@ namespace Bam.Encryption
         /// <returns></returns>
         public override string ReverseTransform(string base64Cipher)
         {
-            return GetReverseTransformer().ReverseTransform(base64Cipher);
+            return GetReverseTransformer()!.ReverseTransform(base64Cipher)!;
         }
 
         /// <summary>

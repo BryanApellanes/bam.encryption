@@ -16,12 +16,12 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the raw AES key bytes.
         /// </summary>
-        public virtual byte[] Key { get; set; }
+        public virtual byte[] Key { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the raw initialization vector bytes.
         /// </summary>
-        public virtual byte[] IV { get; set; }
+        public virtual byte[] IV { get; set; } = null!;
 
         /// <summary>
         /// Securely clears the key and IV from memory and releases resources.

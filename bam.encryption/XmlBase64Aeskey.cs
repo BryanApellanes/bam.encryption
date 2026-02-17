@@ -9,12 +9,12 @@ namespace Bam.Encryption;
 public class XmlBase64Aeskey : AesKey
 {
     static readonly object _aesLock = new object();
-    static volatile XmlBase64Aeskey _key;
+    static volatile XmlBase64Aeskey _key = null!;
     /// <summary>
     /// Gets the advanced encryption key vector pair for the currently running bam system.
     /// </summary>
     [Obsolete("Use AesKey.SystemKey instead")]
-    public static AesKey SystemKey
+    public new static AesKey SystemKey
     {
         get
         {

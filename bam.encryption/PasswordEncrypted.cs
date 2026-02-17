@@ -43,7 +43,7 @@ namespace Bam.Encryption
         {
             get;
             protected set;
-        }
+        } = null!;
 
         /// <summary>
         /// Gets the encrypted cipher text.
@@ -52,9 +52,9 @@ namespace Bam.Encryption
         {
             get;
             internal set;
-        }
+        } = null!;
 
-        string _password;
+        string _password = null!;
         protected internal string Password
         {
             get => _password;

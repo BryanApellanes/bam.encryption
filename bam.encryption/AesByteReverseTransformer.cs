@@ -18,7 +18,7 @@ namespace Bam.Encryption
         }
 
 
-        Func<AesKey> _keyProvider;
+        Func<AesKey> _keyProvider = null!;
         /// <summary>
         /// Gets or sets the function that provides the AES key for decryption. Falls back to the associated transformer's key provider if not set.
         /// </summary>
@@ -33,7 +33,7 @@ namespace Bam.Encryption
                         this._keyProvider = this.AesByteTransformer.KeyProvider;
                     }
                 }
-                return _keyProvider;
+                return _keyProvider!;
             }
             set
             {
@@ -44,7 +44,7 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the HTTP context for context-aware cloning.
         /// </summary>
-        public IHttpContext HttpContext { get; set; }
+        public IHttpContext HttpContext { get; set; } = null!;
 
         protected AesByteTransformer AesByteTransformer
         {

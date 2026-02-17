@@ -27,6 +27,6 @@
         /// <summary>
         /// Gets the media type describing the encryption scheme used (e.g., symmetric or asymmetric cipher).
         /// </summary>
-        public string ContentType { get; protected set; }
+        public string ContentType { get; protected set; } = null!;
     }
 }

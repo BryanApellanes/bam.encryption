@@ -60,7 +60,7 @@ namespace Bam.Encryption
                     return _unencrypted[key];
                 }
                 
-                return null;
+                return null!;
             }
 
             set

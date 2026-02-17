@@ -76,7 +76,7 @@ namespace Bam.Encryption
         /// <param name="publicPemKey">The PEM-encoded public key string.</param>
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <returns>The encrypted cipher text as a Base64 string.</returns>
-        public static string EncryptWithPublicKey(this string input, string publicPemKey, Encoding encoding = null)
+        public static string EncryptWithPublicKey(this string input, string publicPemKey, Encoding? encoding = null)
         {
             return EncryptWithPublicKey(input, publicPemKey.PemToKey(), encoding);
         }
@@ -89,7 +89,7 @@ namespace Bam.Encryption
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
         /// <returns>The encrypted cipher text as a Base64 string.</returns>
-        public static string EncryptWithPublicKey(this string plainText, AsymmetricKeyParameter key, Encoding encoding = null, IAsymmetricBlockCipher engine = null)
+        public static string EncryptWithPublicKey(this string plainText, AsymmetricKeyParameter key, Encoding? encoding = null, IAsymmetricBlockCipher? engine = null)
         {
             byte[] encrypted = GetPublicKeyEncryptedBytes(plainText, key, encoding, engine);
             return Convert.ToBase64String(encrypted);
@@ -103,7 +103,7 @@ namespace Bam.Encryption
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
         /// <returns>The encrypted byte array.</returns>
-        public static byte[] GetPublicKeyEncryptedBytes(this string plainText, AsymmetricKeyParameter key, Encoding encoding = null, IAsymmetricBlockCipher engine = null)
+        public static byte[] GetPublicKeyEncryptedBytes(this string plainText, AsymmetricKeyParameter key, Encoding? encoding = null, IAsymmetricBlockCipher? engine = null)
         {
             if (encoding == null)
             {
@@ -111,7 +111,7 @@ namespace Bam.Encryption
             }
 
             byte[] plainData = encoding.GetBytes(plainText);
-            byte[] encrypted = plainData.AsymmetricEncrypt(key, engine);
+            byte[] encrypted = plainData.AsymmetricEncrypt(key, engine!);
             return encrypted;
         }
 
@@ -122,7 +122,7 @@ namespace Bam.Encryption
         /// <param name="publicPemKey">The PEM-encoded public key.</param>
         /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
         /// <returns>The encrypted byte array.</returns>
-        public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, string publicPemKey, IAsymmetricBlockCipher engine = null)
+        public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, string publicPemKey, IAsymmetricBlockCipher? engine = null)
         {
             return GetPublicKeyEncryptedBytes(plainData, publicPemKey.PemToKey(), engine);
         }
@@ -134,9 +134,9 @@ namespace Bam.Encryption
         /// <param name="key">The asymmetric public key to encrypt with.</param>
         /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
         /// <returns>The encrypted byte array.</returns>
-        public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, AsymmetricKeyParameter key, IAsymmetricBlockCipher engine = null)
+        public static byte[] GetPublicKeyEncryptedBytes(this byte[] plainData, AsymmetricKeyParameter key, IAsymmetricBlockCipher? engine = null)
         {
-            byte[] encrypted = plainData.AsymmetricEncrypt(key, engine);
+            byte[] encrypted = plainData.AsymmetricEncrypt(key, engine!);
             return encrypted;
         }
 
@@ -147,7 +147,7 @@ namespace Bam.Encryption
         /// <param name="keys">The asymmetric key pair containing the private key.</param>
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <returns>The decrypted plain text string.</returns>
-        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricCipherKeyPair keys, Encoding encoding = null)
+        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricCipherKeyPair keys, Encoding? encoding = null)
         {
             return DecryptWithPrivateKey(base64EncodedCipher, keys.Private, encoding, false);
         }
@@ -160,7 +160,7 @@ namespace Bam.Encryption
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <param name="usePkcsPadding">If true, uses PKCS#1 padding on the RSA engine.</param>
         /// <returns>The decrypted plain text string.</returns>
-        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricKeyParameter privateKey, Encoding encoding = null, bool usePkcsPadding = false)
+        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricKeyParameter privateKey, Encoding? encoding = null, bool usePkcsPadding = false)
         {
             return DecryptWithPrivateKey(base64EncodedCipher, privateKey, encoding, Rsa.GetRsaEngine(usePkcsPadding));
         }
@@ -173,9 +173,9 @@ namespace Bam.Encryption
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <param name="engine">The asymmetric block cipher engine to use. Defaults to RSA.</param>
         /// <returns>The decrypted plain text string.</returns>
-        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricKeyParameter privateKey, Encoding encoding = null, IAsymmetricBlockCipher engine = null)
+        public static string DecryptWithPrivateKey(this string base64EncodedCipher, AsymmetricKeyParameter privateKey, Encoding? encoding = null, IAsymmetricBlockCipher? engine = null)
         {
-            byte[] decrypted = GetPrivateKeyDecryptedBytes(base64EncodedCipher, privateKey, engine);
+            byte[] decrypted = GetPrivateKeyDecryptedBytes(base64EncodedCipher, privateKey, engine!);
             if (encoding == null)
             {
                 encoding = Encoding.UTF8;
@@ -204,14 +204,14 @@ namespace Bam.Encryption
         /// <param name="pemString">The PEM-encoded private key string.</param>
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <returns>The decrypted plain text string.</returns>
-        public static string DecryptWithPrivateKey(this string base64EncodedCipher, string pemString, Encoding encoding = null)
+        public static string DecryptWithPrivateKey(this string base64EncodedCipher, string pemString, Encoding? encoding = null)
         {
             if (encoding == null)
             {
                 encoding = Encoding.UTF8;
             }
 
-            return DecryptWithPrivateKey(base64EncodedCipher, pemString.PemToKeyPair(), encoding);
+            return DecryptWithPrivateKey(base64EncodedCipher, encoding.GetBytes(pemString).PemToKeyPair(encoding), encoding);
         }
 
         /// <summary>
@@ -221,7 +221,7 @@ namespace Bam.Encryption
         /// <param name="keyPair">The asymmetric key pair containing the public key.</param>
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
         /// <returns>The encrypted cipher text as a Base64 string.</returns>
-        public static string EncryptWithPublicKey(this string plainText, AsymmetricCipherKeyPair keyPair, Encoding encoding = null)
+        public static string EncryptWithPublicKey(this string plainText, AsymmetricCipherKeyPair keyPair, Encoding? encoding = null)
         {
             if (encoding == null)
             {

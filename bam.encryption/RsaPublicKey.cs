@@ -20,7 +20,7 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the public key pem string.
         /// </summary>
-        public string Pem { get; set; }
+        public new string Pem { get; set; }
 
         /// <summary>
         /// Encrypts the specified plain text string using this RSA public key and returns a Base64-encoded cipher.
@@ -28,7 +28,7 @@ namespace Bam.Encryption
         /// <param name="plainText">The plain text to encrypt.</param>
         /// <param name="encoding">The character encoding to use; defaults to UTF-8 if null.</param>
         /// <returns>The Base64-encoded cipher text.</returns>
-        public string Encrypt(string plainText, Encoding encoding = null)
+        public string Encrypt(string plainText, Encoding? encoding = null)
         {
             byte[] plainData = (encoding ?? Encoding.UTF8).GetBytes(plainText);
             byte[] encrypted = EncryptBytes(plainData);
@@ -52,7 +52,7 @@ namespace Bam.Encryption
         /// <param name="plainData">The data to encrypt.</param>
         /// <param name="engine">The asymmetric block cipher engine to use; defaults to the standard RSA engine if null.</param>
         /// <returns>The encrypted byte array.</returns>
-        public byte[] EncryptBytes(byte[] plainData, IAsymmetricBlockCipher engine = null)
+        public byte[] EncryptBytes(byte[] plainData, IAsymmetricBlockCipher? engine = null)
         {
             return plainData.GetPublicKeyEncryptedBytes(this.Pem, engine);
         }

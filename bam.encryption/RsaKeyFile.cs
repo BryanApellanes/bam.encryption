@@ -24,7 +24,7 @@ namespace Bam.Encryption
         }
         
         static object _defaultLock = new object();
-        static RsaKeyFile _rsaKeyPair;
+        static RsaKeyFile _rsaKeyPair = null!;
         /// <summary>
         /// Gets the default RSA key file, loading from disk or creating a new one if needed.
         /// </summary>

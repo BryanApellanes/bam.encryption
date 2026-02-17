@@ -94,7 +94,7 @@ namespace Bam.Encryption
         {
             get;
             private set;
-        }
+        } = null!;
 
         /// <summary>
         /// Gets or sets the cipher as a Base64-encoded string. Performs lazy encryption on first access if not yet encrypted.
@@ -108,7 +108,7 @@ namespace Bam.Encryption
                     Encrypt();
                 }
 
-                return Convert.ToBase64String(Cipher);
+                return Convert.ToBase64String(Cipher!);
             }
             protected set => Cipher = Convert.FromBase64String(value);
         }

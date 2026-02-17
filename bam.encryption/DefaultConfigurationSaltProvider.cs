@@ -24,7 +24,7 @@ namespace Bam.Encryption
         public DefaultConfigurationSaltProvider() : this("Salt")
         { }
 
-        static ISaltProvider _instance;
+        static ISaltProvider _instance = null!;
         static object _instanceLock = new object();
 
         /// <summary>

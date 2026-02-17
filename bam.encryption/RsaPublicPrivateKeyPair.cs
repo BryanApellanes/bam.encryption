@@ -93,9 +93,9 @@ namespace Bam.Encryption
         /// </summary>
         /// <param name="plainData"></param>
         /// <returns></returns>
-        public byte[] Encrypt(byte[] plainData, IAsymmetricBlockCipher engine = null)
+        public byte[] Encrypt(byte[] plainData, IAsymmetricBlockCipher? engine = null)
         {
-            return plainData.GetPublicKeyEncryptedBytes(_asymmetricCipherKeyPair.Public, engine);
+            return plainData.GetPublicKeyEncryptedBytes(_asymmetricCipherKeyPair!.Public, engine);
         }
         
         /// <summary>

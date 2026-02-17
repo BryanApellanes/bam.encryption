@@ -66,7 +66,7 @@ namespace Bam.Encryption
             get => Path.Combine(BamProfile.VaultsDotSys, SystemKeyFileName);
         }
         
-        private static AesKey _systemKey;
+        private static AesKey _systemKey = null!;
         private static object _systemKeyLock = new object();
         /// <summary>
         /// Gets the system-wide AES key, loading or creating it from disk as needed.
@@ -83,7 +83,7 @@ namespace Bam.Encryption
                     }
                 }
                 
-                return _systemKey;
+                return _systemKey!;
             }
         }
 
@@ -124,7 +124,7 @@ namespace Bam.Encryption
         /// <value>
         /// The key.
         /// </value>
-        public override byte[] Key { get; set; }
+        public override byte[] Key { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the base 64 encoded initialization vector.
@@ -132,7 +132,7 @@ namespace Bam.Encryption
         /// <value>
         /// The iv.
         /// </value>
-        public override byte[] IV { get; set; }
+        public override byte[] IV { get; set; } = null!;
 
         /// <summary>
         /// Gets a Base64 encoded value representing the cipher of the specified

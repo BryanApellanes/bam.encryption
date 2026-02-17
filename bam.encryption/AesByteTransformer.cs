@@ -35,7 +35,7 @@ namespace Bam.Encryption
         {
         }
 
-        AesByteReverseTransformer _aesByteUntransformer;
+        AesByteReverseTransformer _aesByteUntransformer = null!;
         protected AesByteReverseTransformer AesByteReverseTransformer 
         {
             get
@@ -66,7 +66,7 @@ namespace Bam.Encryption
         /// <returns>The decrypted byte array.</returns>
         public override byte[] ReverseTransform(byte[] cipherBytes)
         {
-            return GetReverseTransformer().ReverseTransform(cipherBytes);
+            return GetReverseTransformer()!.ReverseTransform(cipherBytes)!;
         }
 
         /// <summary>

@@ -14,7 +14,7 @@ namespace Bam.Encryption
         /// </summary>
         /// <param name="aesBase64Transformer">The transformer whose key provider will be used for decryption.</param>
         /// <param name="encoding">The text encoding to use. Defaults to UTF-8.</param>
-        public AesBase64ReverseTransformer(AesBase64Transformer aesBase64Transformer, Encoding encoding = null)
+        public AesBase64ReverseTransformer(AesBase64Transformer aesBase64Transformer, Encoding? encoding = null)
         {
             this.AesBase64Transformer = aesBase64Transformer;
             this.KeyProvider = aesBase64Transformer.KeyProvider;
@@ -36,7 +36,7 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the HTTP context for context-aware cloning.
         /// </summary>
-        public IHttpContext HttpContext { get; set; }
+        public IHttpContext HttpContext { get; set; } = null!;
 
         /// <summary>
         /// Creates a shallow clone of this instance, copying properties and event handlers.

@@ -32,12 +32,12 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the character encoding to use for string conversion.
         /// </summary>
-        public Encoding Encoding { get; set; }
+        public Encoding Encoding { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the HTTP context for context-aware cloning.
         /// </summary>
-        public IHttpContext HttpContext { get; set; }
+        public IHttpContext HttpContext { get; set; } = null!;
 
         /// <inheritdoc />
         public object Clone()

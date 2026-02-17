@@ -16,7 +16,7 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the PEM-encoded key data as a byte array.
         /// </summary>
-        public byte[] Pem { get; set; }
+        public byte[] Pem { get; set; } = null!;
 
         /// <summary>
         /// Clears the PEM data from memory and releases resources.

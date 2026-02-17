@@ -19,7 +19,7 @@ namespace Bam.Encryption
         /// <returns>A Base64-encoded string representing the encrypted value.</returns>
         public static string Encrypt(string value)
         {
-            return Encrypt(value, XmlBase64Aeskey.SystemKey);
+            return Encrypt(value, AesKey.SystemKey);
         }
 
         /// <summary>
@@ -185,7 +185,7 @@ namespace Bam.Encryption
         /// <returns>The decrypted plain text string.</returns>
         public static string Decrypt(string base64EncodedValue)
         {
-            return Decrypt(base64EncodedValue, XmlBase64Aeskey.SystemKey);
+            return Decrypt(base64EncodedValue, AesKey.SystemKey);
         }
 
         /// <summary>
@@ -242,7 +242,7 @@ namespace Bam.Encryption
             aes.Key = key;
             aes.Padding = PaddingMode.PKCS7;
             
-            byte[] plainText = null;
+            byte[] plainText = null!;
             using (MemoryStream ms = new MemoryStream())
             {
                 using (CryptoStream cs = new CryptoStream(ms, aes.CreateDecryptor(), CryptoStreamMode.Write))
@@ -287,7 +287,7 @@ namespace Bam.Encryption
         /// <returns>The AES key used for encryption.</returns>
         public static AesKey Encrypt(this object target, string filePath, string keyFilePath, bool writeKeyFile)
         {
-            string text = ToBase64EncodedEncryptedXml(target, out XmlBase64Aeskey key);
+            string text = ToBase64EncodedEncryptedXml(target, out AesKey key);
             using (StreamWriter sw = new StreamWriter(filePath))
             {
                 sw.Write(text);
@@ -295,7 +295,7 @@ namespace Bam.Encryption
 
             if (writeKeyFile)
             {
-                key.SaveXmlBase64(keyFilePath);
+                key.ToJsonFile(keyFilePath);
             }
             return key;
         }
@@ -332,7 +332,7 @@ namespace Bam.Encryption
                 throw new FileNotFoundException(string.Format("The key file specified {0} does not exist", keyFile));
             }
 
-            AesKey key = XmlBase64Aeskey.LoadXmlBase64(keyFile); 
+            AesKey key = File.ReadAllText(keyFile).FromJson<AesKey>();
 
             return Decrypt<T>(filePath, key);
         }
@@ -360,13 +360,13 @@ namespace Bam.Encryption
         /// <param name="target">The object to serialize</param>
         /// <param name="key">The key used to encrypt and decrypt the resulting string</param>
         /// <returns>string</returns>
-        public static string ToBase64EncodedEncryptedXml(this object target, out XmlBase64Aeskey key)
+        public static string ToBase64EncodedEncryptedXml(this object target, out AesKey key)
         {
             string xml = ObjectExtensions.ToXml(target);
             AesManaged rm = new AesManaged();
             rm.GenerateIV();
             rm.GenerateKey();
-            key = new XmlBase64Aeskey()
+            key = new AesKey()
             {
                 Key = rm.Key,
                 IV = rm.IV

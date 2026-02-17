@@ -17,7 +17,7 @@
         /// Gets a typed decryptor that can decrypt data encrypted by this encryptor.
         /// </summary>
         /// <returns>A typed decryptor instance.</returns>
-        IDecryptor<TData> GetDecryptor();
+        new IDecryptor<TData> GetDecryptor();
     }
 
     /// <summary>

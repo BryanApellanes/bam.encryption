@@ -6,14 +6,14 @@
 public class SignatureVerification : ISignatureVerification
 {
     /// <inheritdoc />
-    public ISignature Signature { get; set; }
+    public ISignature Signature { get; set; } = null!;
 
     /// <inheritdoc />
     public bool Success { get; set; }
 
     /// <inheritdoc />
-    public string Message { get; set; }
+    public string Message { get; set; } = null!;
 
     /// <inheritdoc />
-    public IPublicKey IssuerPublicKey { get; set; }
+    public IPublicKey IssuerPublicKey { get; set; } = null!;
 }

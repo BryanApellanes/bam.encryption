@@ -42,7 +42,7 @@ public class EccPublicKey : PublicKey
     /// <summary>
     /// Gets or sets the EC public key parameters.
     /// </summary>
-    public new ECPublicKeyParameters Value { get; set; }
+    public new ECPublicKeyParameters Value { get; set; } = null!;
 
     /// <summary>
     /// Implicitly converts an <see cref="EccPublicKey"/> to its PEM-encoded string representation.

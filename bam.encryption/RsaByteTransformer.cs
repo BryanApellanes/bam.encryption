@@ -60,12 +60,12 @@
         /// <summary>
         /// Gets or sets the paired reverse RSA byte transformer for decryption.
         /// </summary>
-        public RsaByteReverseTransformer RsaByteReverseTransformer { get; set; }
+        public RsaByteReverseTransformer RsaByteReverseTransformer { get; set; } = null!;
 
         /// <inheritdoc />
         public override byte[] ReverseTransform(byte[] cipherBytes)
         {
-            return GetReverseTransformer().ReverseTransform(cipherBytes);
+            return GetReverseTransformer()!.ReverseTransform(cipherBytes)!;
         }
 
         /// <inheritdoc />

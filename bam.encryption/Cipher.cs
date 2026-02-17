@@ -124,7 +124,7 @@
         /// <summary>
         /// Gets or sets the raw encrypted byte data.
         /// </summary>
-        public byte[] Data { get; set; }
+        public byte[] Data { get; set; } = null!;
 
         /// <summary>
         /// Returns the cipher data as a Base64-encoded string.

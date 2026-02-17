@@ -28,8 +28,8 @@ namespace Bam.Encryption
             if (string.IsNullOrEmpty(sharedSecret))
                 throw new ArgumentNullException("sharedSecret");
 
-            string outStr = null;                       // Encrypted string to return
-            RijndaelManaged aesAlg = null;              // RijndaelManaged object used to encrypt the data.
+            string outStr = null!;                       // Encrypted string to return
+            RijndaelManaged aesAlg = null!;              // RijndaelManaged object used to encrypt the data.
 
             try
             {
@@ -86,11 +86,11 @@ namespace Bam.Encryption
 
             // Declare the RijndaelManaged object
             // used to decrypt the data.
-            RijndaelManaged aesAlg = null;
+            RijndaelManaged aesAlg = null!;
 
             // Declare the string used to hold
             // the decrypted text.
-            string plaintext = null;
+            string plaintext = null!;
 
             try
             {

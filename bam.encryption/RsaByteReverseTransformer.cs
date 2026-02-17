@@ -36,12 +36,12 @@ namespace Bam.Encryption
         /// <summary>
         /// Gets or sets the paired forward RSA byte transformer.
         /// </summary>
-        public RsaByteTransformer RsaByteTransformer { get; set; }
+        public RsaByteTransformer RsaByteTransformer { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the HTTP context for context-aware cloning.
         /// </summary>
-        public IHttpContext HttpContext { get; set; }
+        public IHttpContext HttpContext { get; set; } = null!;
 
         /// <inheritdoc />
         public object Clone()

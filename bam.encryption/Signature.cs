@@ -6,14 +6,14 @@
 public class Signature : ISignature
 {
     /// <inheritdoc />
-    public byte[] SignatureBytes { get; set; }
+    public byte[] SignatureBytes { get; set; } = null!;
 
     /// <inheritdoc />
     public string SignatureBase64 { get => SignatureBytes.ToBase64(); }
 
     /// <inheritdoc />
-    public string Data { get; set; }
+    public string Data { get; set; } = null!;
 
     /// <inheritdoc />
-    public string Algorithm { get; set; }
+    public string Algorithm { get; set; } = null!;
 }

@@ -36,8 +36,8 @@ public abstract class CertificateIssuer : Loggable, ICertificateIssuer
     /// </summary>
     public TimeSpan ValidFor { get; set; }
 
-    protected event EventHandler<CertificateIssuerEventArgs> BeforeCertificateGenerated;
-    protected event EventHandler<CertificateIssuerEventArgs> AfterCertificateGenerated;
+    protected event EventHandler<CertificateIssuerEventArgs> BeforeCertificateGenerated = null!;
+    protected event EventHandler<CertificateIssuerEventArgs> AfterCertificateGenerated = null!;
 
     /// <summary>
     /// Creates an X.509 certificate signed by the issuer's private key for the specified subject's public key. Automatically selects ECDSA or RSA signature based on the issuer key type.
