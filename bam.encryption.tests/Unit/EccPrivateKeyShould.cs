@@ -8,18 +8,19 @@ public class EccPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void SignAndVerifyRoundTrip()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-        EccPublicKey publicKey = keyPair.GetEccPublicKey();
         string testData = 64.RandomLetters();
 
-        When.A<EccPrivateKey>("signs string and verifies with public key",
-            privateKey,
-            (pk) =>
-            {
-                ISignature signature = pk.Sign(testData);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(new EccPrivateKey(keyPair));
+            reg.Set(keyPair.GetEccPublicKey());
+        })
+        .When<EccPrivateKey>("signs string and verifies with public key", (pk, reg) =>
+        {
+            ISignature signature = pk.Sign(testData);
+            return reg.Get<EccPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -34,18 +35,19 @@ public class EccPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void SignBytesAndVerifyRoundTrip()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-        EccPublicKey publicKey = keyPair.GetEccPublicKey();
         byte[] testBytes = System.Text.Encoding.UTF8.GetBytes(64.RandomLetters());
 
-        When.A<EccPrivateKey>("signs bytes and verifies with public key",
-            privateKey,
-            (pk) =>
-            {
-                ISignature signature = pk.Sign(testBytes);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(new EccPrivateKey(keyPair));
+            reg.Set(keyPair.GetEccPublicKey());
+        })
+        .When<EccPrivateKey>("signs bytes and verifies with public key", (pk, reg) =>
+        {
+            ISignature signature = pk.Sign(testBytes);
+            return reg.Get<EccPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {

@@ -8,17 +8,19 @@ public class RsaPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void SignWithKeyStringReturnsValidSignature()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         string testData = 64.RandomLetters();
 
-        When.A<RsaPrivateKeyUsageContext>("signs string with protected key and verifies",
-            () => new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()),
-            (context) =>
-            {
-                ISignature signature = context.SignWithKey(testData);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(keyPair.GetRsaPublicKey());
+            reg.Set(new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()));
+        })
+        .When<RsaPrivateKeyUsageContext>("signs string with protected key and verifies", (context, reg) =>
+        {
+            ISignature signature = context.SignWithKey(testData);
+            return reg.Get<RsaPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -33,17 +35,19 @@ public class RsaPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void SignWithKeyBytesReturnsValidSignature()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         byte[] testBytes = System.Text.Encoding.UTF8.GetBytes(64.RandomLetters());
 
-        When.A<RsaPrivateKeyUsageContext>("signs bytes with protected key and verifies",
-            () => new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()),
-            (context) =>
-            {
-                ISignature signature = context.SignWithKey(testBytes);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(keyPair.GetRsaPublicKey());
+            reg.Set(new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()));
+        })
+        .When<RsaPrivateKeyUsageContext>("signs bytes with protected key and verifies", (context, reg) =>
+        {
+            ISignature signature = context.SignWithKey(testBytes);
+            return reg.Get<RsaPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -56,22 +60,26 @@ public class RsaPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void UseKeyDecryptsAndExecutesAction()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         string plaintext = "test for use key decrypt";
-        string encrypted = publicKey.Encrypt(plaintext);
 
-        When.A<RsaPrivateKeyUsageContext>("decrypts and executes action with key",
-            () => new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()),
-            (context) =>
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
+            reg.Set(publicKey);
+            reg.Set(publicKey.Encrypt(plaintext));
+            reg.Set(new RsaPrivateKeyUsageContext((byte[])keyPair.Pem.Clone()));
+        })
+        .When<RsaPrivateKeyUsageContext>("decrypts and executes action with key", (context, reg) =>
+        {
+            string encrypted = reg.Get<string>();
+            string? decrypted = null;
+            context.UseKey(privateKey =>
             {
-                string? decrypted = null;
-                context.UseKey(privateKey =>
-                {
-                    decrypted = ((RsaPrivateKey)privateKey).Decrypt(encrypted);
-                });
-                return decrypted!;
-            })
+                decrypted = ((RsaPrivateKey)privateKey).Decrypt(encrypted);
+            });
+            return decrypted!;
+        })
         .TheTest
         .ShouldPass(because =>
         {

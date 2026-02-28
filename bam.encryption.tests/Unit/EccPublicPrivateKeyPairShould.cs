@@ -1,4 +1,4 @@
-﻿using Bam.Console;
+using Bam.Console;
 using Bam.Test;
 
 namespace Bam.Encryption.Tests.Unit;
@@ -14,6 +14,9 @@ public class EccPublicPrivateKeyPairShould : UnitTestMenuContainer
         EccPublicPrivateKeyPair ecc2 = new EccPublicPrivateKeyPair();
         string testValue = 128.RandomLetters();
 
+        string decrypted1 = string.Empty;
+        string decrypted2 = string.Empty;
+
         When.A<EccPublicPrivateKeyPair>("generates same AES key from shared secret",
             ecc1,
             (ecc) =>
@@ -24,17 +27,15 @@ public class EccPublicPrivateKeyPairShould : UnitTestMenuContainer
                 string cipher1 = aes1.Encrypt(testValue);
                 string cipher2 = aes2.Encrypt(testValue);
 
-                string decrypted1 = aes1.Decrypt(cipher2);
-                string decrypted2 = aes2.Decrypt(cipher1);
+                decrypted1 = aes1.Decrypt(cipher2);
+                decrypted2 = aes2.Decrypt(cipher1);
 
-                return new object[] { decrypted1, decrypted2 };
+                return decrypted1;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string decrypted1 = (string)results[0];
-            string decrypted2 = (string)results[1];
+            because.ResultAs<string>();
             because.ItsTrue("decrypted1 equals original", testValue.Equals(decrypted1));
             because.ItsTrue("decrypted2 equals original", testValue.Equals(decrypted2));
             because.ItsTrue("both decrypted values are equal", decrypted1.Equals(decrypted2));
@@ -49,6 +50,9 @@ public class EccPublicPrivateKeyPairShould : UnitTestMenuContainer
         EccPublicPrivateKeyPair ecc = new EccPublicPrivateKeyPair();
         string testValue = 128.RandomLetters();
 
+        string decrypted1 = string.Empty;
+        string decrypted2 = string.Empty;
+
         When.A<EccPublicPrivateKeyPair>("generates same AES key with one ECC pair",
             ecc,
             (e) =>
@@ -59,17 +63,15 @@ public class EccPublicPrivateKeyPairShould : UnitTestMenuContainer
                 string cipher1 = aes1.Encrypt(testValue);
                 string cipher2 = aes2.Encrypt(testValue);
 
-                string decrypted1 = aes1.Decrypt(cipher2);
-                string decrypted2 = aes2.Decrypt(cipher1);
+                decrypted1 = aes1.Decrypt(cipher2);
+                decrypted2 = aes2.Decrypt(cipher1);
 
-                return new object[] { decrypted1, decrypted2 };
+                return decrypted1;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string decrypted1 = (string)results[0];
-            string decrypted2 = (string)results[1];
+            because.ResultAs<string>();
             because.ItsTrue("decrypted1 equals original", testValue.Equals(decrypted1));
             because.ItsTrue("decrypted2 equals original", testValue.Equals(decrypted2));
             because.ItsTrue("both decrypted values are equal", decrypted1.Equals(decrypted2));

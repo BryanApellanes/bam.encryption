@@ -14,25 +14,25 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void UseKeyExecutesActionWithEccPrivateKey()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        EccPublicKey publicKey = keyPair.GetEccPublicKey();
-        byte[] pemBytes = GetEccPemBytes(keyPair);
         string testData = 64.RandomLetters();
-
         bool isEccPrivateKey = false;
 
-        When.A<EccPrivateKeyUsageContext>("executes action with ECC private key",
-            new EccPrivateKeyUsageContext(pemBytes),
-            (context) =>
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(keyPair.GetEccPublicKey());
+            reg.Set(new EccPrivateKeyUsageContext(GetEccPemBytes(keyPair)));
+        })
+        .When<EccPrivateKeyUsageContext>("executes action with ECC private key", (context, reg) =>
+        {
+            ISignature? signature = null;
+            context.UseKey(privateKey =>
             {
-                ISignature? signature = null;
-                context.UseKey(privateKey =>
-                {
-                    isEccPrivateKey = privateKey is EccPrivateKey;
-                    signature = privateKey.Sign(testData);
-                });
-                return publicKey.Verify(signature!);
-            })
+                isEccPrivateKey = privateKey is EccPrivateKey;
+                signature = privateKey.Sign(testData);
+            });
+            return reg.Get<EccPublicKey>().Verify(signature!);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -46,18 +46,19 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void SignWithKeyStringReturnsValidSignature()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        EccPublicKey publicKey = keyPair.GetEccPublicKey();
-        byte[] pemBytes = GetEccPemBytes(keyPair);
         string testData = 64.RandomLetters();
 
-        When.A<EccPrivateKeyUsageContext>("signs string with protected key and verifies",
-            new EccPrivateKeyUsageContext(pemBytes),
-            (context) =>
-            {
-                ISignature signature = context.SignWithKey(testData);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(keyPair.GetEccPublicKey());
+            reg.Set(new EccPrivateKeyUsageContext(GetEccPemBytes(keyPair)));
+        })
+        .When<EccPrivateKeyUsageContext>("signs string with protected key and verifies", (context, reg) =>
+        {
+            ISignature signature = context.SignWithKey(testData);
+            return reg.Get<EccPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -72,18 +73,19 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void SignWithKeyBytesReturnsValidSignature()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        EccPublicKey publicKey = keyPair.GetEccPublicKey();
-        byte[] pemBytes = GetEccPemBytes(keyPair);
         byte[] testBytes = System.Text.Encoding.UTF8.GetBytes(64.RandomLetters());
 
-        When.A<EccPrivateKeyUsageContext>("signs bytes with protected key and verifies",
-            new EccPrivateKeyUsageContext(pemBytes),
-            (context) =>
-            {
-                ISignature signature = context.SignWithKey(testBytes);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(keyPair.GetEccPublicKey());
+            reg.Set(new EccPrivateKeyUsageContext(GetEccPemBytes(keyPair)));
+        })
+        .When<EccPrivateKeyUsageContext>("signs bytes with protected key and verifies", (context, reg) =>
+        {
+            ISignature signature = context.SignWithKey(testBytes);
+            return reg.Get<EccPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -96,25 +98,25 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
     [UnitTest]
     public void DisposesClearsCipherBytes()
     {
-        using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
-        byte[] pemBytes = GetEccPemBytes(keyPair);
-
-        When.A<EccPrivateKeyUsageContext>("clears cipher bytes on dispose",
-            new EccPrivateKeyUsageContext(pemBytes),
-            (context) =>
+        After.Setup(reg =>
+        {
+            EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
+            reg.Set(new EccPrivateKeyUsageContext(GetEccPemBytes(keyPair)));
+        })
+        .When<EccPrivateKeyUsageContext>("clears cipher bytes on dispose", (context, reg) =>
+        {
+            context.Dispose();
+            bool threw = false;
+            try
             {
-                context.Dispose();
-                bool threw = false;
-                try
-                {
-                    context.UseKey(_ => { });
-                }
-                catch
-                {
-                    threw = true;
-                }
-                return threw;
-            })
+                context.UseKey(_ => { });
+            }
+            catch
+            {
+                threw = true;
+            }
+            return threw;
+        })
         .TheTest
         .ShouldPass(because =>
         {

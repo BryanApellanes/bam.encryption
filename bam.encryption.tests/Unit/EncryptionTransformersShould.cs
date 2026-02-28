@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using Bam.Console;
 using Bam.DependencyInjection;
 using Bam.Encryption;
@@ -25,7 +25,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("deciphered equals original", testData.Equals((string)because.Result));
+            because.ItsTrue("deciphered equals original", testData.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -37,23 +37,22 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         string testData = "this is the test data";
         byte[] testDataBytes = Encoding.UTF8.GetBytes(testData);
 
+        byte[] decipheredBytes = Array.Empty<byte>();
+
         When.A<AesByteTransformer>("round-trips bytes through AES byte transformer",
             () => new AesByteTransformer(new AesKey()),
             (aesByteTransformer) =>
             {
                 byte[] cipherData = aesByteTransformer.Transform(testDataBytes);
-                byte[] deciphered = aesByteTransformer.GetReverseTransformer().ReverseTransform(cipherData);
-                string decipheredText = Encoding.UTF8.GetString(deciphered);
-                return new object[] { testDataBytes, deciphered, decipheredText };
+                decipheredBytes = aesByteTransformer.GetReverseTransformer().ReverseTransform(cipherData);
+                string decipheredText = Encoding.UTF8.GetString(decipheredBytes);
+                return decipheredText;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            byte[] original = (byte[])results[0];
-            byte[] deciphered = (byte[])results[1];
-            string decipheredText = (string)results[2];
-            because.ItsTrue("byte arrays match", original.SequenceEqual(deciphered));
+            string decipheredText = because.ResultAs<string>();
+            because.ItsTrue("byte arrays match", testDataBytes.SequenceEqual(decipheredBytes));
             because.ItsTrue("deciphered text equals original", testData.Equals(decipheredText));
         })
         .SoBeHappy()
@@ -65,20 +64,20 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
     {
         string testData = "this is the test data";
 
+        string base64Cipher = string.Empty;
+
         When.A<AesBase64Transformer>("round-trips string through AES base64 transformer",
             () => new AesBase64Transformer(new AesKey()),
             (aesBase64Transformer) =>
             {
-                string base64Cipher = aesBase64Transformer.Transform(testData);
+                base64Cipher = aesBase64Transformer.Transform(testData);
                 string deciphered = aesBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher);
-                return new object[] { base64Cipher, deciphered };
+                return deciphered;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string base64Cipher = (string)results[0];
-            string deciphered = (string)results[1];
+            string deciphered = because.ResultAs<string>();
             because.ItsTrue("cipher differs from original", !testData.Equals(base64Cipher));
             because.ItsTrue("deciphered equals original", testData.Equals(deciphered));
         })
@@ -121,29 +120,24 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         string testData = "this is the test data";
         byte[] testDataBytes = Encoding.UTF8.GetBytes(testData);
 
+        byte[] cipherBytes = Array.Empty<byte>();
+
         When.A<RsaByteTransformer>("round-trips bytes through RSA byte transformer",
             () => new RsaByteTransformer(new RsaPublicPrivateKeyPair()),
             (rsaByteTransformer) =>
             {
-                byte[] cipher = rsaByteTransformer.Transform(testDataBytes);
-                byte[] deciphered = rsaByteTransformer.GetReverseTransformer().ReverseTransform(cipher);
+                cipherBytes = rsaByteTransformer.Transform(testDataBytes);
+                byte[] deciphered = rsaByteTransformer.GetReverseTransformer().ReverseTransform(cipherBytes);
                 string decipheredText = Encoding.UTF8.GetString(deciphered);
-
-                string base64Data = Convert.ToBase64String(testDataBytes);
-                string base64Cipher = Convert.ToBase64String(cipher);
-
-                return new object[] { cipher, deciphered, decipheredText, base64Data, base64Cipher };
+                return decipheredText;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            byte[] cipher = (byte[])results[0];
-            byte[] deciphered = (byte[])results[1];
-            string decipheredText = (string)results[2];
-            string base64Data = (string)results[3];
-            string base64Cipher = (string)results[4];
-            because.ItsTrue("cipher length differs from original", testDataBytes.Length != cipher.Length);
+            string decipheredText = because.ResultAs<string>();
+            string base64Data = Convert.ToBase64String(testDataBytes);
+            string base64Cipher = Convert.ToBase64String(cipherBytes);
+            because.ItsTrue("cipher length differs from original", testDataBytes.Length != cipherBytes.Length);
             because.ItsTrue("base64 data is not empty", !string.IsNullOrEmpty(base64Data));
             because.ItsTrue("base64 cipher is not empty", !string.IsNullOrEmpty(base64Cipher));
             because.ItsTrue("base64 cipher differs from base64 data", !base64Data.Equals(base64Cipher));
@@ -158,20 +152,20 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
     {
         string testData = "this is the test data";
 
+        string base64Cipher = string.Empty;
+
         When.A<RsaBase64Transformer>("round-trips string through RSA base64 transformer",
             () => new RsaBase64Transformer(new RsaPublicPrivateKeyPair()),
             (rsaBase64Transformer) =>
             {
-                string base64Cipher = rsaBase64Transformer.Transform(testData);
+                base64Cipher = rsaBase64Transformer.Transform(testData);
                 string deciphered = rsaBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher);
-                return new object[] { base64Cipher, deciphered };
+                return deciphered;
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string base64Cipher = (string)results[0];
-            string deciphered = (string)results[1];
+            string deciphered = because.ResultAs<string>();
             because.ItsTrue("cipher length differs from original", testData.Length != base64Cipher.Length);
             because.ItsTrue("cipher is not empty", !string.IsNullOrEmpty(base64Cipher));
             because.ItsTrue("cipher differs from original", !testData.Equals(base64Cipher));
@@ -198,7 +192,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("deciphered string equals original", testValue.Equals((string)because.Result));
+            because.ItsTrue("deciphered string equals original", testValue.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -223,7 +217,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("deciphered equals original", testValue.Equals((string)because.Result));
+            because.ItsTrue("deciphered equals original", testValue.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -246,7 +240,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("deciphered string equals original", testValue.Equals((string)because.Result));
+            because.ItsTrue("deciphered string equals original", testValue.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -271,7 +265,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("deciphered equals original", testValue.Equals((string)because.Result));
+            because.ItsTrue("deciphered equals original", testValue.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -287,20 +281,18 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
             TailCount = RandomNumber.Between(1, 9),
         };
 
-        When.A<ValueTransformerPipelineFactory>("creates and uses a value transformer pipeline",
-            () =>
-            {
-                ServiceRegistry testRegistry = new ServiceRegistry();
-                testRegistry.For<IAesKeySource>().Use<AesKey>();
-                return new ValueTransformerPipelineFactory(testRegistry);
-            },
-            (factory) =>
-            {
-                ValueTransformerPipeline<TestMonkey> pipeline = factory.Create<TestMonkey>(typeof(AesByteTransformer).Assembly, "aes");
-                string cipher = pipeline.Transform(testMonkey).ToBase64();
-                TestMonkey deciphered = pipeline.GetReverseTransformer().ReverseTransform(cipher.FromBase64());
-                return deciphered;
-            })
+        After.Setup(reg =>
+        {
+            reg.For<IAesKeySource>().Use<AesKey>();
+            reg.Set(new ValueTransformerPipelineFactory(reg));
+        })
+        .When<ValueTransformerPipelineFactory>("creates and uses a value transformer pipeline", (factory, reg) =>
+        {
+            ValueTransformerPipeline<TestMonkey> pipeline = factory.Create<TestMonkey>(typeof(AesByteTransformer).Assembly, "aes");
+            string cipher = pipeline.Transform(testMonkey).ToBase64();
+            TestMonkey deciphered = pipeline.GetReverseTransformer().ReverseTransform(cipher.FromBase64());
+            return deciphered;
+        })
         .TheTest
         .ShouldPass(because =>
         {

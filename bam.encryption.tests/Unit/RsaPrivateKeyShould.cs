@@ -8,18 +8,19 @@ public class RsaPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void SignAndVerifyRoundTrip()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPrivateKey privateKey = new RsaPrivateKey(keyPair);
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         string testData = 64.RandomLetters();
 
-        When.A<RsaPrivateKey>("signs string and verifies with public key",
-            privateKey,
-            (pk) =>
-            {
-                ISignature signature = pk.Sign(testData);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(new RsaPrivateKey(keyPair));
+            reg.Set(keyPair.GetRsaPublicKey());
+        })
+        .When<RsaPrivateKey>("signs string and verifies with public key", (pk, reg) =>
+        {
+            ISignature signature = pk.Sign(testData);
+            return reg.Get<RsaPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -34,18 +35,19 @@ public class RsaPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void SignBytesAndVerifyRoundTrip()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPrivateKey privateKey = new RsaPrivateKey(keyPair);
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         byte[] testBytes = System.Text.Encoding.UTF8.GetBytes(64.RandomLetters());
 
-        When.A<RsaPrivateKey>("signs bytes and verifies with public key",
-            privateKey,
-            (pk) =>
-            {
-                ISignature signature = pk.Sign(testBytes);
-                return publicKey.Verify(signature);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(new RsaPrivateKey(keyPair));
+            reg.Set(keyPair.GetRsaPublicKey());
+        })
+        .When<RsaPrivateKey>("signs bytes and verifies with public key", (pk, reg) =>
+        {
+            ISignature signature = pk.Sign(testBytes);
+            return reg.Get<RsaPublicKey>().Verify(signature);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -58,18 +60,19 @@ public class RsaPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void DecryptStringEncryptedWithPublicKey()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPrivateKey privateKey = new RsaPrivateKey(keyPair);
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         string plaintext = "test message for encryption";
 
-        When.A<RsaPrivateKey>("decrypts string encrypted with public key",
-            privateKey,
-            (pk) =>
-            {
-                string encrypted = publicKey.Encrypt(plaintext);
-                return pk.Decrypt(encrypted);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(new RsaPrivateKey(keyPair));
+            reg.Set(keyPair.GetRsaPublicKey());
+        })
+        .When<RsaPrivateKey>("decrypts string encrypted with public key", (pk, reg) =>
+        {
+            string encrypted = reg.Get<RsaPublicKey>().Encrypt(plaintext);
+            return pk.Decrypt(encrypted);
+        })
         .TheTest
         .ShouldPass(because =>
         {
@@ -82,18 +85,19 @@ public class RsaPrivateKeyShould : UnitTestMenuContainer
     [UnitTest]
     public void DecryptBytesEncryptedWithPublicKey()
     {
-        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
-        RsaPrivateKey privateKey = new RsaPrivateKey(keyPair);
-        RsaPublicKey publicKey = keyPair.GetRsaPublicKey();
         byte[] plainBytes = System.Text.Encoding.UTF8.GetBytes("test bytes for encryption");
 
-        When.A<RsaPrivateKey>("decrypts bytes encrypted with public key",
-            privateKey,
-            (pk) =>
-            {
-                byte[] encrypted = publicKey.EncryptBytes(plainBytes);
-                return pk.Decrypt(encrypted);
-            })
+        After.Setup(reg =>
+        {
+            RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair();
+            reg.Set(new RsaPrivateKey(keyPair));
+            reg.Set(keyPair.GetRsaPublicKey());
+        })
+        .When<RsaPrivateKey>("decrypts bytes encrypted with public key", (pk, reg) =>
+        {
+            byte[] encrypted = reg.Get<RsaPublicKey>().EncryptBytes(plainBytes);
+            return pk.Decrypt(encrypted);
+        })
         .TheTest
         .ShouldPass(because =>
         {

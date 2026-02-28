@@ -24,7 +24,7 @@ public class SymmetricDataEncryptorShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("decrypted text equals original", text.Equals((string)because.Result));
+            because.ItsTrue("decrypted text equals original", text.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -49,7 +49,7 @@ public class SymmetricDataEncryptorShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("decrypted bytes equal original text", text.Equals((string)because.Result));
+            because.ItsTrue("decrypted bytes equal original text", text.Equals(because.ResultAs<string>()));
         })
         .SoBeHappy()
         .UnlessItFailed();
