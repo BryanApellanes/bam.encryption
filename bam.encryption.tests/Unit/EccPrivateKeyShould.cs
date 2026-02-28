@@ -18,17 +18,14 @@ public class EccPrivateKeyShould : UnitTestMenuContainer
             (pk) =>
             {
                 ISignature signature = pk.Sign(testData);
-                ISignatureVerification verification = publicKey.Verify(signature);
-                return new object[] { signature.Data, verification.Success };
+                return publicKey.Verify(signature);
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string signedData = (string)results[0];
-            bool verified = (bool)results[1];
-            because.ItsTrue("signed data matches original", testData.Equals(signedData));
-            because.ItsTrue("signature verified", verified);
+            ISignatureVerification verification = because.ResultAs<ISignatureVerification>();
+            because.ItsTrue("signed data matches original", testData.Equals(verification.Signature.Data));
+            because.ItsTrue("signature verified", verification.Success);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -47,13 +44,12 @@ public class EccPrivateKeyShould : UnitTestMenuContainer
             (pk) =>
             {
                 ISignature signature = pk.Sign(testBytes);
-                ISignatureVerification verification = publicKey.Verify(signature);
-                return verification.Success;
+                return publicKey.Verify(signature);
             })
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("signature verified", (bool)because.Result);
+            because.ItsTrue("signature verified", because.ResultAs<ISignatureVerification>().Success);
         })
         .SoBeHappy()
         .UnlessItFailed();

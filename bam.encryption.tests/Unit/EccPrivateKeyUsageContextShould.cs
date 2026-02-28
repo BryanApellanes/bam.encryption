@@ -19,28 +19,25 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
         byte[] pemBytes = GetEccPemBytes(keyPair);
         string testData = 64.RandomLetters();
 
+        bool isEccPrivateKey = false;
+
         When.A<EccPrivateKeyUsageContext>("executes action with ECC private key",
             new EccPrivateKeyUsageContext(pemBytes),
             (context) =>
             {
-                bool isEccPrivateKey = false;
                 ISignature? signature = null;
                 context.UseKey(privateKey =>
                 {
                     isEccPrivateKey = privateKey is EccPrivateKey;
                     signature = privateKey.Sign(testData);
                 });
-                ISignatureVerification verification = publicKey.Verify(signature!);
-                return new object[] { isEccPrivateKey, verification.Success };
+                return publicKey.Verify(signature!);
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            bool isEccKey = (bool)results[0];
-            bool verified = (bool)results[1];
-            because.ItsTrue("key is EccPrivateKey", isEccKey);
-            because.ItsTrue("signature verified", verified);
+            because.ItsTrue("key is EccPrivateKey", isEccPrivateKey);
+            because.ItsTrue("signature verified", because.ResultAs<ISignatureVerification>().Success);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -59,17 +56,14 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
             (context) =>
             {
                 ISignature signature = context.SignWithKey(testData);
-                ISignatureVerification verification = publicKey.Verify(signature);
-                return new object[] { signature.Data, verification.Success };
+                return publicKey.Verify(signature);
             })
         .TheTest
         .ShouldPass(because =>
         {
-            object[] results = (object[])because.Result;
-            string signedData = (string)results[0];
-            bool verified = (bool)results[1];
-            because.ItsTrue("signed data matches original", testData.Equals(signedData));
-            because.ItsTrue("signature verified", verified);
+            ISignatureVerification verification = because.ResultAs<ISignatureVerification>();
+            because.ItsTrue("signed data matches original", testData.Equals(verification.Signature.Data));
+            because.ItsTrue("signature verified", verification.Success);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -88,13 +82,12 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
             (context) =>
             {
                 ISignature signature = context.SignWithKey(testBytes);
-                ISignatureVerification verification = publicKey.Verify(signature);
-                return verification.Success;
+                return publicKey.Verify(signature);
             })
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("signature verified", (bool)because.Result);
+            because.ItsTrue("signature verified", because.ResultAs<ISignatureVerification>().Success);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -125,7 +118,7 @@ public class EccPrivateKeyUsageContextShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass(because =>
         {
-            because.ItsTrue("using disposed context throws or fails", (bool)because.Result);
+            because.ItsTrue("using disposed context throws or fails", because.ResultAs<bool>());
         })
         .SoBeHappy()
         .UnlessItFailed();
