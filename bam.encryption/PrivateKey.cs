@@ -36,4 +36,8 @@ public abstract class PrivateKey : DisposablePem, IPrivateKey
 
     /// <inheritdoc />
     public AsymmetricKeyParameter Value { get; }
+
+    public abstract ISignature Sign(string data);
+
+    public abstract ISignature Sign(byte[] data);
 }

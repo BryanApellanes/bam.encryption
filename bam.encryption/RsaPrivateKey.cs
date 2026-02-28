@@ -1,4 +1,5 @@
 ﻿using Org.BouncyCastle.Crypto;
+using System.Text;
 
 namespace Bam.Encryption;
 
@@ -28,5 +29,27 @@ public class RsaPrivateKey : PrivateKey
     /// <param name="privateKey">The asymmetric key parameter representing the private key.</param>
     public RsaPrivateKey(AsymmetricKeyParameter privateKey) : base(privateKey)
     {
+    }
+
+    public override ISignature Sign(string data)
+    {
+        return new RsaSignatureProvider().Sign(new PrivateKeyProvider(Value), data, "SHA512WITHRSA");
+    }
+
+    public override ISignature Sign(byte[] data)
+    {
+        return Sign(Convert.ToBase64String(data));
+    }
+
+    public string Decrypt(string base64Cipher, Encoding? encoding = null)
+    {
+        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair(Pem);
+        return keyPair.Decrypt(base64Cipher, encoding);
+    }
+
+    public byte[] Decrypt(byte[] cipherBytes)
+    {
+        using RsaPublicPrivateKeyPair keyPair = new RsaPublicPrivateKeyPair(Pem);
+        return keyPair.Decrypt(cipherBytes);
     }
 }

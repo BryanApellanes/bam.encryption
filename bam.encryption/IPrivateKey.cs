@@ -16,4 +16,8 @@ public interface IPrivateKey
     /// Gets the underlying asymmetric key parameter value.
     /// </summary>
     AsymmetricKeyParameter Value { get; }
+
+    ISignature Sign(string data);
+
+    ISignature Sign(byte[] data);
 }

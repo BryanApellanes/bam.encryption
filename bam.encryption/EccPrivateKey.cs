@@ -29,4 +29,14 @@ public class EccPrivateKey : PrivateKey
     public EccPrivateKey(AsymmetricKeyParameter privateKey) : base(privateKey)
     {
     }
+
+    public override ISignature Sign(string data)
+    {
+        return new EccSignatureProvider().Sign(new PrivateKeyProvider(Value), data, "SHA256WITHECDSA");
+    }
+
+    public override ISignature Sign(byte[] data)
+    {
+        return Sign(Convert.ToBase64String(data));
+    }
 }

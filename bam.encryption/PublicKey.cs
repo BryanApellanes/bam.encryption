@@ -37,4 +37,9 @@ public abstract class PublicKey : IPublicKey
 
     /// <inheritdoc />
     public AsymmetricKeyParameter Value { get; }
+
+    public ISignatureVerification Verify(ISignature signature)
+    {
+        return new RsaSignatureProvider().VerifySignature(signature, this);
+    }
 }

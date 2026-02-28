@@ -45,6 +45,20 @@ namespace Bam.Encryption
             }
         }
 
+        public ISignature SignWithKey(string data)
+        {
+            ISignature? result = null;
+            UseKey(privateKey => result = privateKey.Sign(data));
+            return result!;
+        }
+
+        public ISignature SignWithKey(byte[] data)
+        {
+            ISignature? result = null;
+            UseKey(privateKey => result = privateKey.Sign(data));
+            return result!;
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed)
