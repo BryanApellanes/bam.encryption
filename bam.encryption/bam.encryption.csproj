@@ -22,7 +22,6 @@
     <None Remove="Encryption\Data\Generated_Dao\**" />
     <None Remove="Encryption\Encryption_Generated\**" />
     <None Remove="Encryption\Partials\**" />
-    <Compile Remove="CertificateIssuerOptions.cs" />
   </ItemGroup>
 
   <ItemGroup>
