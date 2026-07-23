@@ -63,6 +63,41 @@ public class EccPublicKeyShould : UnitTestMenuContainer
         .UnlessItFailed();
     }
 
+    [UnitTest]
+    public void ThrowInvalidCastFromEcValueWhenConstructedFromNonEcKey()
+    {
+        After.Setup(reg =>
+        {
+            reg.Set(new RsaPublicPrivateKeyPair());
+        })
+        .When<RsaPublicPrivateKeyPair>("constructs an EccPublicKey from RSA key material and reads it", (rsaKeyPair, reg) =>
+        {
+            EccPublicKey misTyped = new EccPublicKey(rsaKeyPair.PublicKeyPem);
+            string pem = misTyped.Pem;
+            AsymmetricKeyParameter value = misTyped.Value;
+            InvalidCastException? thrown = null;
+            try
+            {
+                ECPublicKeyParameters unused = misTyped.EcValue;
+            }
+            catch (InvalidCastException ex)
+            {
+                thrown = ex;
+            }
+            return new NonEcConstructionOutcome(pem, value, thrown);
+        })
+        .TheTest
+        .ShouldPass(because =>
+        {
+            NonEcConstructionOutcome outcome = because.ResultAs<NonEcConstructionOutcome>();
+            because.ItsTrue("Pem read succeeds for the non-EC key", !string.IsNullOrWhiteSpace(outcome.Pem));
+            because.ItsTrue("Value read succeeds for the non-EC key", outcome.Value != null);
+            because.ItsTrue("EcValue read throws InvalidCastException", outcome.Thrown != null);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
     private sealed record KeyValueReadOutcome(
         AsymmetricKeyParameter ConcreteValue,
         AsymmetricKeyParameter BaseValue,
@@ -73,4 +108,9 @@ public class EccPublicKeyShould : UnitTestMenuContainer
         EccPublicKey Original,
         string Pem,
         EccPublicKey RoundTripped);
+
+    private sealed record NonEcConstructionOutcome(
+        string Pem,
+        AsymmetricKeyParameter Value,
+        InvalidCastException? Thrown);
 }
