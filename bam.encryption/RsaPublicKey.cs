@@ -14,13 +14,7 @@ namespace Bam.Encryption
         /// <param name="publicKeyPem">The PEM-encoded RSA public key string.</param>
         public RsaPublicKey(string publicKeyPem) : base(publicKeyPem.PemToKey())
         {
-            this.Pem = publicKeyPem;
         }
-
-        /// <summary>
-        /// Gets or sets the public key pem string.
-        /// </summary>
-        public new string Pem { get; set; }
 
         /// <summary>
         /// Encrypts the specified plain text string using this RSA public key and returns a Base64-encoded cipher.
