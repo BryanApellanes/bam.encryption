@@ -40,16 +40,23 @@ public class EccPublicKey : PublicKey
     }
 
     /// <summary>
-    /// Gets or sets the EC public key parameters.
+    /// Gets the key material from <see cref="PublicKey.Value"/> as EC public key parameters.
+    /// Deliberately named distinctly from the base <see cref="PublicKey.Value"/> so it cannot
+    /// shadow the populated base property (see issue #5); the base ctor is the single writer
+    /// of the key material.
     /// </summary>
-    public new ECPublicKeyParameters Value { get; set; } = null!;
+    /// <exception cref="InvalidCastException">
+    /// Thrown when this instance was constructed from a non-EC <see cref="Org.BouncyCastle.Crypto.AsymmetricKeyParameter"/>.
+    /// </exception>
+    public ECPublicKeyParameters EcValue => (ECPublicKeyParameters)Value;
 
     /// <summary>
-    /// Implicitly converts an <see cref="EccPublicKey"/> to its PEM-encoded string representation.
+    /// Implicitly converts an <see cref="EccPublicKey"/> to its PEM-encoded string representation,
+    /// reading the populated base <see cref="PublicKey.Value"/>.
     /// </summary>
     /// <param name="eccPublicKey">The ECC public key to convert.</param>
     public static implicit operator string(EccPublicKey eccPublicKey)
     {
-        return eccPublicKey.Value.ToPem();
+        return eccPublicKey.Pem;
     }
 }

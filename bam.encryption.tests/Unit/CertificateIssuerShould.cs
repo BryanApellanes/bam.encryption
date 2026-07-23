@@ -21,7 +21,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Default Behavior Test");
             DateTime preCallUtc = DateTime.UtcNow;
             X509Certificate certificate = issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value);
@@ -56,7 +56,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
             issuer.ValidFor = TimeSpan.FromDays(30);
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Instance ValidFor Test");
             return issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value);
         })
@@ -83,7 +83,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
             issuer.ValidFor = TimeSpan.FromDays(30);
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Per Call Override Test");
             CertificateIssuanceOptions options = CertificateIssuanceOptions.Default().WithValidFor(TimeSpan.FromDays(10));
             return issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value, options);
@@ -110,7 +110,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=End Entity Test");
             return issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value, CertificateIssuanceOptions.EndEntity());
         })
@@ -137,7 +137,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Path Length Test");
             CertificateIssuanceOptions options = CertificateIssuanceOptions.Default();
             options.PathLengthConstraint = 0;
@@ -166,7 +166,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Non Positive Options Test");
             Exception? zeroThrown = Catch(() => issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value,
                 CertificateIssuanceOptions.Default().WithValidFor(TimeSpan.Zero)));
@@ -198,7 +198,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Path Length Without CA Test");
             CertificateIssuanceOptions options = CertificateIssuanceOptions.EndEntity();
             options.PathLengthConstraint = 1;
@@ -228,7 +228,7 @@ public class CertificateIssuerShould : UnitTestMenuContainer
         {
             using EccPublicPrivateKeyPair keyPair = new EccPublicPrivateKeyPair();
             EccPrivateKey privateKey = new EccPrivateKey(keyPair);
-            PublicKey publicKey = keyPair.GetEccPublicKey();
+            EccPublicKey publicKey = keyPair.GetEccPublicKey();
             X509Name name = new X509Name("CN=Negative Instance ValidFor Test");
             issuer.ValidFor = TimeSpan.FromDays(-30);
             Exception? negativeThrown = Catch(() => issuer.CreateCertificate(name, name, privateKey.Value, publicKey.Value));
