@@ -15,6 +15,14 @@ public interface IDetachedSignatureVerifier
     /// Never throws for a bad signature, payload or algorithm name: the result's
     /// <see cref="ISignatureVerification.Success"/> is false and <see cref="ISignatureVerification.Message"/>
     /// says why.
+    /// <para>
+    /// <paramref name="algorithm"/> must be chosen by the server, never taken from the client:
+    /// BouncyCastle resolves any registered signer name, including <c>NONEwithECDSA</c>,
+    /// <c>NONEwithRSA</c> and <c>MD5withRSA</c>, so a client-supplied name could downgrade the
+    /// digest.  Derive it from the stored credential (for passkeys,
+    /// <see cref="Cose.CoseAlgorithms.SignerName(Cose.CoseAlgorithm)"/> on the credential's recorded
+    /// algorithm).
+    /// </para>
     /// </summary>
     /// <param name="payload">The bytes that were signed.</param>
     /// <param name="signature">The signature bytes (DER-encoded for ECDSA).</param>

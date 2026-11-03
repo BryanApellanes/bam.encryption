@@ -5,6 +5,8 @@ using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Math.EC;
 using Org.BouncyCastle.Security;
 
 namespace Bam.Encryption.Tests.Unit.Cose;
@@ -127,11 +129,16 @@ public class CoseKeyShould : UnitTestMenuContainer
             byte[] offCurveY = (byte[])y.Clone();
             offCurveY[0] ^= 0x01;
             byte[] modulus = new byte[256];
-            Array.Fill(modulus, (byte)0x7f);
+            Array.Fill(modulus, (byte)0xff);
             byte[] shortModulus = new byte[128];
-            Array.Fill(shortModulus, (byte)0x7f);
+            Array.Fill(shortModulus, (byte)0xff);
             byte[] leadingZeroModulus = (byte[])modulus.Clone();
             leadingZeroModulus[0] = 0;
+            byte[] topBitClearModulus = (byte[])modulus.Clone();
+            topBitClearModulus[0] = 0x7f;
+            byte[] evenModulus = (byte[])modulus.Clone();
+            evenModulus[^1] = 0xfe;
+            EccPublicKey p384 = new EccPublicKey(GenerateOn("P-384").Public);
             return new RejectionOutcome(
                 Rejects(Ec(2, -8, 1, x, y)),
                 Rejects(Ec(3, -7, 1, x, y)),
@@ -145,8 +152,16 @@ public class CoseKeyShould : UnitTestMenuContainer
                 Rejects(Rsa(leadingZeroModulus, new byte[] { 1, 0, 1 })),
                 Rejects(Rsa(modulus, new byte[] { 1, 0, 0 })),
                 Rejects(Rsa(modulus, new byte[] { 1, 0, 0, 0, 0, 0, 0, 0, 1 })),
+                Rejects(Rsa(topBitClearModulus, new byte[] { 1, 0, 1 })),
+                Rejects(Rsa(evenModulus, new byte[] { 1, 0, 1 })),
+                Rejects(Rsa(modulus, new byte[] { 1 })),
+                Rejects(Rsa(modulus, new byte[] { 0, 1, 0, 1 })),
+                FromEccRejects(p384, CoseAlgorithm.ES256),
+                FromEccRejects(keyPair.GetEccPublicKey(), CoseAlgorithm.ES384),
+                FromEccRejects(keyPair.GetEccPublicKey(), CoseAlgorithm.RS256),
                 !Rejects(Ec(2, -7, 1, x, y)),
-                !Rejects(Rsa(modulus, new byte[] { 1, 0, 1 })));
+                !Rejects(Rsa(modulus, new byte[] { 1, 0, 1 })),
+                !Rejects(Rsa(modulus, new byte[] { 3 })));
         })
         .TheTest
         .ShouldPass<RejectionOutcome>((because, outcome) =>
@@ -163,8 +178,59 @@ public class CoseKeyShould : UnitTestMenuContainer
             because.ItsTrue("RSA modulus with a leading zero is refused", outcome.LeadingZeroModulus);
             because.ItsTrue("even RSA exponent is refused", outcome.EvenExponent);
             because.ItsTrue("oversized RSA exponent is refused", outcome.LongExponent);
+            because.ItsTrue("2047-bit RSA modulus (top bit clear) is refused", outcome.TopBitClearModulus);
+            because.ItsTrue("even RSA modulus is refused", outcome.EvenModulus);
+            because.ItsTrue("RSA exponent 1 is refused", outcome.ExponentOne);
+            because.ItsTrue("RSA exponent with a leading zero is refused", outcome.LeadingZeroExponent);
+            because.ItsTrue("FromEcc refuses a P-384 key for ES256 with a CoseKeyException", outcome.FromEccP384AsEs256);
+            because.ItsTrue("FromEcc refuses a P-256 key for ES384 with a CoseKeyException", outcome.FromEccP256AsEs384);
+            because.ItsTrue("FromEcc refuses a non-ECDSA algorithm", outcome.FromEccRs256);
             because.ItsTrue("valid EC key is accepted", outcome.ValidEc);
             because.ItsTrue("valid RSA key is accepted", outcome.ValidRsa);
+            because.ItsTrue("RSA exponent 3 is accepted", outcome.ValidRsaExponentThree);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void ParseRfc9052Vector()
+    {
+        After.Setup(reg =>
+        {
+            reg.Set(new CborVectors());
+        })
+        .When<CborVectors>("parses the RFC 9052 Appendix C P-256 key 11 as an ES256 COSE_Key", (vectors, reg) =>
+        {
+            // RFC 9052 Appendix C.7.1, key "11" (P-256), written out by hand rather than by
+            // CborWriter: {1: 2, 3: -7, -1: 1, -2: x, -3: y}.  The alg label is added because
+            // WebAuthn credential keys carry it; x and y are the RFC's bytes.
+            string x = "bac5b11cad8f99f9c72b05cf4b9e26d244dc189f745228255a219a86d6a09eff";
+            string y = "20138bf82dc1b6d562be0fa54ab7804a3a64b6d72ccfed6b6fb6ed28bbfc117e";
+            byte[] encoded = vectors.Hex("a5" + "0102" + "0326" + "2001" + "215820" + x + "225820" + y);
+            CoseKey parsed = CoseKey.Parse(encoded);
+            IPublicKey restored = parsed.ToPublicKey();
+            EccPublicKey ecc = (EccPublicKey)restored;
+            ECPoint q = ecc.EcValue.Q.Normalize();
+            return new VectorOutcome(
+                parsed,
+                parsed.X!.AsSpan().SequenceEqual(vectors.Hex(x)),
+                parsed.Y!.AsSpan().SequenceEqual(vectors.Hex(y)),
+                q.AffineXCoord.ToBigInteger().Equals(new BigInteger(1, vectors.Hex(x))),
+                q.AffineYCoord.ToBigInteger().Equals(new BigInteger(1, vectors.Hex(y))),
+                CborWriter.Encode(parsed.ToCbor()).AsSpan().SequenceEqual(encoded));
+        })
+        .TheTest
+        .ShouldPass<VectorOutcome>((because, outcome) =>
+        {
+            because.ItsTrue("key type is EC2", outcome.Parsed.KeyType == CoseAlgorithms.KeyTypeEc2);
+            because.ItsTrue("algorithm is ES256", outcome.Parsed.Algorithm == CoseAlgorithm.ES256);
+            because.ItsTrue("curve is P-256", outcome.Parsed.Curve == CoseAlgorithms.CurveP256);
+            because.ItsTrue("x matches the RFC bytes", outcome.XMatches);
+            because.ItsTrue("y matches the RFC bytes", outcome.YMatches);
+            because.ItsTrue("restored point x is the RFC x", outcome.PointXMatches);
+            because.ItsTrue("restored point y is the RFC y", outcome.PointYMatches);
+            because.ItsTrue("re-encoding reproduces the vector bytes", outcome.ReEncodes);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -202,6 +268,28 @@ public class CoseKeyShould : UnitTestMenuContainer
         }
     }
 
+    private static bool FromEccRejects(EccPublicKey publicKey, CoseAlgorithm algorithm)
+    {
+        try
+        {
+            CoseKey.FromEcc(publicKey, algorithm);
+            return false;
+        }
+        catch (CoseKeyException)
+        {
+            return true;
+        }
+    }
+
+    private static AsymmetricCipherKeyPair GenerateOn(string curveName)
+    {
+        X9ECParameters parameters = ECNamedCurveTable.GetByName(curveName);
+        ECDomainParameters domain = new ECDomainParameters(parameters.Curve, parameters.G, parameters.N, parameters.H, parameters.GetSeed());
+        ECKeyPairGenerator generator = new ECKeyPairGenerator();
+        generator.Init(new ECKeyGenerationParameters(domain, new SecureRandom()));
+        return generator.GenerateKeyPair();
+    }
+
     private static bool RejectsConversion(byte[] encoded)
     {
         try
@@ -221,5 +309,8 @@ public class CoseKeyShould : UnitTestMenuContainer
 
     private sealed record RejectionOutcome(bool UnsupportedAlgorithm, bool KeyTypeMismatch, bool CurveMismatch, bool ShortCoordinate,
         bool OffCurve, bool MissingParameter, bool NotAMap, bool Malformed, bool ShortModulus, bool LeadingZeroModulus,
-        bool EvenExponent, bool LongExponent, bool ValidEc, bool ValidRsa);
+        bool EvenExponent, bool LongExponent, bool TopBitClearModulus, bool EvenModulus, bool ExponentOne, bool LeadingZeroExponent,
+        bool FromEccP384AsEs256, bool FromEccP256AsEs384, bool FromEccRs256, bool ValidEc, bool ValidRsa, bool ValidRsaExponentThree);
+
+    private sealed record VectorOutcome(CoseKey Parsed, bool XMatches, bool YMatches, bool PointXMatches, bool PointYMatches, bool ReEncodes);
 }

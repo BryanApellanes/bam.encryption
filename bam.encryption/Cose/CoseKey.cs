@@ -121,13 +121,13 @@ public sealed class CoseKey
 
         byte[] modulus = RequireBytes(map, LabelN, "n");
         byte[] exponent = RequireBytes(map, LabelE, "e");
-        if (modulus.Length < MinimumRsaModulusBytes || modulus[0] == 0)
+        if (modulus.Length < MinimumRsaModulusBytes || (modulus[0] & 0x80) == 0 || (modulus[^1] & 1) == 0)
         {
-            throw new CoseKeyException($"RSA modulus must be at least {MinimumRsaModulusBytes * 8} bits with no leading zero byte.");
+            throw new CoseKeyException($"RSA modulus must be an odd integer of at least {MinimumRsaModulusBytes * 8} bits (big-endian, no leading zero byte, top bit set).");
         }
-        if (exponent.Length == 0 || exponent.Length > 8 || (exponent[^1] & 1) == 0)
+        if (exponent.Length == 0 || exponent.Length > 8 || exponent[0] == 0 || (exponent[^1] & 1) == 0 || (exponent.Length == 1 && exponent[0] < 3))
         {
-            throw new CoseKeyException("RSA public exponent must be an odd integer of at most 8 bytes.");
+            throw new CoseKeyException("RSA public exponent must be an odd integer of at least 3 and at most 8 bytes, with no leading zero byte.");
         }
         return new CoseKey(keyType, algorithm, null, null, null, modulus, exponent);
     }
@@ -202,14 +202,20 @@ public sealed class CoseKey
     /// <param name="publicKey">The EC public key.</param>
     /// <param name="algorithm">The ECDSA algorithm the key will be used with.</param>
     /// <returns>The COSE key.</returns>
-    /// <exception cref="CoseKeyException">The algorithm is not an ECDSA algorithm.</exception>
+    /// <exception cref="CoseKeyException">The algorithm is not an ECDSA algorithm, or the key is not on the curve the algorithm requires.</exception>
     public static CoseKey FromEcc(EccPublicKey publicKey, CoseAlgorithm algorithm)
     {
         ArgumentNullException.ThrowIfNull(publicKey);
         long? curve = CoseAlgorithms.CurveIdentifier(algorithm);
-        if (curve is null)
+        string? curveName = CoseAlgorithms.CurveName(algorithm);
+        if (curve is null || curveName is null)
         {
             throw new CoseKeyException($"{algorithm} is not an ECDSA algorithm.");
+        }
+        ECCurve required = ECNamedCurveTable.GetByName(curveName).Curve;
+        if (!required.Equals(publicKey.EcValue.Parameters.Curve))
+        {
+            throw new CoseKeyException($"The key is not on {curveName}, the curve {algorithm} requires.");
         }
         ECPoint point = publicKey.EcValue.Q.Normalize();
         int fieldSize = FieldSizeBytes(algorithm);

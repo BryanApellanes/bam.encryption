@@ -16,9 +16,16 @@ CBOR attestation object. This namespace decodes that subset without a third-part
   `long`, invalid UTF-8, truncated input, trailing bytes and nesting deeper than
   `CborReader.MaxDepth` raise `CborFormatException`. Tags are skipped transparently.
   `Read(bytes, out int consumed)` decodes a prefix and reports its length.
-- `CborWriter.Encode(value)` is the inverse, emitting shortest-form definite-length CBOR.
+  The reader is not a canonical-CBOR validator: non-shortest integer encodings and tagged
+  map keys are accepted, which is harmless for a relying party because WebAuthn signatures
+  cover the raw bytes, never the decoded tree.
+- `CborWriter.Encode(value)` is the inverse, emitting definite-length CBOR with shortest-form
+  integer arguments. Floating-point `CborSimple` values are always written as 64-bit doubles,
+  so a half or single read in re-encodes wider: float round trips are by value, not by bytes.
 - `CoseKey.Parse(bytes)` / `CoseKey.From(map)` parse a COSE_Key for `CoseAlgorithm.ES256`,
-  `ES384`, `ES512` (EC2 on P-256/P-384/P-521) or `RS256` (RSA, 2048-bit minimum).
+  `ES384`, `ES512` (EC2 on P-256/P-384/P-521; coordinates must be exactly the field size) or
+  `RS256` (RSA; the modulus must be an odd integer of at least 2048 bits with its top bit set
+  and no leading zero byte, the exponent an odd integer from 3 up to 8 bytes).
   `ToPublicKey()` returns the framework `EccPublicKey` (point validated on the curve) or
   `RsaPublicKey`; `FromEcc` / `FromRsa` / `ToCbor` go the other way.
 - `CoseAlgorithms` maps each algorithm to its BouncyCastle signer name, curve and key type.

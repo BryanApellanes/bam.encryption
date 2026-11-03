@@ -3,9 +3,11 @@ using System.Text;
 namespace Bam.Encryption.Cose;
 
 /// <summary>
-/// Encodes a <see cref="CborValue"/> tree as definite-length CBOR (RFC 8949) using the shortest
-/// argument encoding, the inverse of <see cref="CborReader"/>.  Used to build COSE keys and
-/// attestation objects in tests and by hosts that emit COSE structures.
+/// Encodes a <see cref="CborValue"/> tree as definite-length CBOR (RFC 8949), the inverse of
+/// <see cref="CborReader"/>.  Integer arguments (values, lengths, tags) use the shortest encoding;
+/// floating-point <see cref="CborSimple"/> values are always written as 64-bit doubles, so a half
+/// or single read in re-encodes wider and float round trips are by value, not by bytes.  Used to
+/// build COSE keys and attestation objects in tests and by hosts that emit COSE structures.
 /// </summary>
 public static class CborWriter
 {
