@@ -2,6 +2,6 @@
 
 public class TestMonkey
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
     public int TailCount { get; set; }
 }
