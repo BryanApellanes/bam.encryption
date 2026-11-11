@@ -363,7 +363,7 @@ namespace Bam.Encryption
         public static string ToBase64EncodedEncryptedXml(this object target, out AesKey key)
         {
             string xml = ObjectExtensions.ToXml(target);
-            AesManaged rm = new AesManaged();
+            using System.Security.Cryptography.Aes rm = System.Security.Cryptography.Aes.Create();
             rm.GenerateIV();
             rm.GenerateKey();
             key = new AesKey()

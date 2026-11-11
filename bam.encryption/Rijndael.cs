@@ -29,16 +29,13 @@ namespace Bam.Encryption
                 throw new ArgumentNullException("sharedSecret");
 
             string outStr = null!;                       // Encrypted string to return
-            RijndaelManaged aesAlg = null!;              // RijndaelManaged object used to encrypt the data.
+            System.Security.Cryptography.Aes aesAlg = null!;              // Aes object used to encrypt the data.
 
             try
             {
-                // generate the key from the shared secret and the salt
-                Rfc2898DeriveBytes key = new Rfc2898DeriveBytes(sharedSecret, _salt);
-
-                // Create a RijndaelManaged object
-                aesAlg = new RijndaelManaged();
-                aesAlg.Key = key.GetBytes(aesAlg.KeySize / 8);
+                // Create an Aes object and generate the key from the shared secret and the salt
+                aesAlg = System.Security.Cryptography.Aes.Create();
+                aesAlg.Key = DeriveKey(sharedSecret, aesAlg.KeySize / 8);
 
                 // Create a decryptor to perform the stream transform.
                 ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV);
@@ -62,7 +59,7 @@ namespace Bam.Encryption
             }
             finally
             {
-                // Clear the RijndaelManaged object.
+                // Clear the Aes object.
                 if (aesAlg != null)
                     aesAlg.Clear();
             }
@@ -84,9 +81,9 @@ namespace Bam.Encryption
             if (string.IsNullOrEmpty(sharedSecret))
                 throw new ArgumentNullException("sharedSecret");
 
-            // Declare the RijndaelManaged object
+            // Declare the Aes object
             // used to decrypt the data.
-            RijndaelManaged aesAlg = null!;
+            System.Security.Cryptography.Aes aesAlg = null!;
 
             // Declare the string used to hold
             // the decrypted text.
@@ -94,17 +91,14 @@ namespace Bam.Encryption
 
             try
             {
-                // generate the key from the shared secret and the salt
-                Rfc2898DeriveBytes key = new Rfc2898DeriveBytes(sharedSecret, _salt);
-
                 // Create the streams used for decryption.                
                 byte[] bytes = Convert.FromBase64String(cipherText);
                 using (MemoryStream msDecrypt = new MemoryStream(bytes))
                 {
-                    // Create a RijndaelManaged object
+                    // Create an Aes object
                     // with the specified key and IV.
-                    aesAlg = new RijndaelManaged();
-                    aesAlg.Key = key.GetBytes(aesAlg.KeySize / 8);
+                    aesAlg = System.Security.Cryptography.Aes.Create();
+                    aesAlg.Key = DeriveKey(sharedSecret, aesAlg.KeySize / 8);
                     // Get the initialization vector from the encrypted stream
                     aesAlg.IV = ReadByteArray(msDecrypt);
                     // Create a decrytor to perform the stream transform.
@@ -121,12 +115,22 @@ namespace Bam.Encryption
             }
             finally
             {
-                // Clear the RijndaelManaged object.
+                // Clear the Aes object.
                 if (aesAlg != null)
                     aesAlg.Clear();
             }
 
             return plaintext;
+        }
+
+        /// <summary>
+        /// Derives the key the way <c>new Rfc2898DeriveBytes(sharedSecret, salt)</c> did: PBKDF2 with HMAC-SHA1 and
+        /// 1000 iterations. Those were the defaults of the now obsolete constructor; they are spelled out so text
+        /// encrypted before the change still decrypts.
+        /// </summary>
+        private static byte[] DeriveKey(string sharedSecret, int keyBytes)
+        {
+            return Rfc2898DeriveBytes.Pbkdf2(sharedSecret, _salt, 1000, HashAlgorithmName.SHA1, keyBytes);
         }
 
         private static byte[] ReadByteArray(Stream s)

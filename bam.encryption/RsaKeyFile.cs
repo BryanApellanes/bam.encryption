@@ -222,12 +222,17 @@ namespace Bam.Encryption
 
         private static RSACryptoServiceProvider CreateRSACryptoServiceProvider(int keySize = 1024)
         {
-            CspParameters RSAParams = new CspParameters
+            if (OperatingSystem.IsWindows())
             {
-                Flags = CspProviderFlags.UseMachineKeyStore
-            };
-            RSACryptoServiceProvider publicKey = new RSACryptoServiceProvider(keySize, RSAParams);
-            return publicKey;
+                CspParameters RSAParams = new CspParameters
+                {
+                    Flags = CspProviderFlags.UseMachineKeyStore
+                };
+                return new RSACryptoServiceProvider(keySize, RSAParams);
+            }
+
+            // CspParameters and the machine key store exist only on Windows; elsewhere the key is ephemeral.
+            return new RSACryptoServiceProvider(keySize);
         }
     }
 }
