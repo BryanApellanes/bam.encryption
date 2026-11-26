@@ -20,14 +20,18 @@ public static class DeviceKeyAlgorithm
 
 /// <summary>
 /// Names one device key: the scope it belongs to (an account or derived handle) and its alias within that scope.
-/// Both use the characters <c>a-z</c>, <c>0-9</c>, <c>.</c>, <c>_</c> and <c>-</c>, start with a letter or digit,
-/// and are at most 64 characters.
+/// Both use the characters <c>a-z</c>, <c>0-9</c>, <c>.</c>, <c>_</c> and <c>-</c>, start and end with a letter or
+/// digit, and are at most 64 characters. A name whose first dot-separated part is a Windows device name
+/// (<c>con</c>, <c>prn</c>, <c>aux</c>, <c>nul</c>, <c>com0</c>-<c>com9</c>, <c>lpt0</c>-<c>lpt9</c>) is refused, so a
+/// store can use a scope and alias as file names on every platform, and two different ids never name the same file.
 /// </summary>
 /// <param name="Scope">The scope the key belongs to.</param>
 /// <param name="Alias">The key's alias within the scope.</param>
 public sealed record DeviceKeyId(string Scope, string Alias)
 {
-    private static readonly Regex NamePattern = new Regex("^[a-z0-9][a-z0-9._-]{0,63}$", RegexOptions.CultureInvariant);
+    private static readonly Regex NamePattern = new Regex(@"\A[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?\z", RegexOptions.CultureInvariant);
+
+    private static readonly Regex DeviceNamePattern = new Regex(@"\A(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|\z)", RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Whether <paramref name="value"/> is a valid scope or alias.
@@ -36,7 +40,7 @@ public sealed record DeviceKeyId(string Scope, string Alias)
     /// <returns>True when it matches the allowed form.</returns>
     public static bool IsValidName(string? value)
     {
-        return value != null && NamePattern.IsMatch(value);
+        return value != null && NamePattern.IsMatch(value) && !DeviceNamePattern.IsMatch(value);
     }
 
     /// <summary>

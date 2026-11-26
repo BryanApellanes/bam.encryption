@@ -213,8 +213,9 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
         Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
 
+        DirectoryInfo roundTripRecords = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
         When.A<WindowsTpmDeviceKeyStore>("creates a TPM key, signs, lists, and deletes it",
-            () => new WindowsTpmDeviceKeyStore(new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N"))), TimeProvider.System),
+            () => new WindowsTpmDeviceKeyStore(roundTripRecords, TimeProvider.System),
             (store) =>
             {
                 string scope = "test." + DeviceKeyId.NewAlias();
@@ -248,6 +249,262 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         })
         .SoBeHappy()
         .UnlessItFailed();
+        DeleteQuietly(roundTripRecords);
+    }
+
+    [UnitTest]
+    public void RefuseNamesThatTwoStoresCouldMapToOneFile()
+    {
+        When.A<string[]>("checks names that collide on disk or are Windows device names",
+            new[] { "alice.", "alice\n", "alice..", "alice-", "nul", "nul.x", "con", "com1", "lpt9.k7", "aux", "-alice", "" },
+            (refused) => new NameOutcome(
+                refused.Where(DeviceKeyId.IsValidName).ToList(),
+                new[] { "a", "a.b", "a..b", "alice.k7m2q9xz", "console", "nully", "com10", new string('a', 64) }.Where(name => !DeviceKeyId.IsValidName(name)).ToList(),
+                DeviceKeyId.IsValidName(new string('a', 65))))
+        .TheTest
+        .ShouldPass<NameOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"a trailing dot or dash, a trailing newline and the device names are refused (accepted: {string.Join(",", outcome.WronglyAccepted)})", outcome.WronglyAccepted.Count == 0);
+            because.ItsTrue($"ordinary names still pass (refused: {string.Join(",", outcome.WronglyRefused)})", outcome.WronglyRefused.Count == 0);
+            because.ItsTrue("65 characters is too long", !outcome.SixtyFiveAccepted);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void RefuseEveryMangledKeyWithoutThrowing()
+    {
+        When.A<string>("mutates every byte of a valid P-256 key and canonicalises each result",
+            "P-256",
+            (_) =>
+            {
+                using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+                byte[] valid = key.ExportSubjectPublicKeyInfo();
+                byte[] badPrefix = (byte[])valid.Clone();
+                badPrefix[valid.Length - 65] = 0xB8;
+                int thrown = 0;
+                int accepted = 0;
+                for (int position = 0; position < valid.Length; position++)
+                {
+                    for (int value = 0; value < 256; value++)
+                    {
+                        if (value == valid[position])
+                        {
+                            continue;
+                        }
+                        byte[] mutated = (byte[])valid.Clone();
+                        mutated[position] = (byte)value;
+                        try
+                        {
+                            if (CanonicalSpki.Canonicalize(mutated).Succeeded)
+                            {
+                                accepted++;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            thrown++;
+                        }
+                    }
+                }
+                return new MangledOutcome(CanonicalSpki.Canonicalize(badPrefix).Error?.Category, thrown, accepted);
+            })
+        .TheTest
+        .ShouldPass<MangledOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("a bad point prefix (0xB8) is InvalidRequest", outcome.BadPrefix == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue($"no mutation throws ({outcome.Thrown} did)", outcome.Thrown == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void RefuseAFieldThatIsNotValidText()
+    {
+        When.A<string>("builds payloads with lone surrogates and with a real surrogate pair",
+            TaggedPayload.DeviceKey,
+            (tag) => new SurrogateOutcome(
+                TaggedPayload.Build(tag, "abc\uD800").Error?.Category,
+                TaggedPayload.Build(tag, "\uDC00abc").Error?.Category,
+                TaggedPayload.Build(tag, "\uD83D\uDE00 laptop").Succeeded,
+                TaggedPayload.Tags is string[]))
+        .TheTest
+        .ShouldPass<SurrogateOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("a trailing high surrogate is InvalidRequest", outcome.LoneHigh == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("a leading low surrogate is InvalidRequest", outcome.LoneLow == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("an emoji (a valid pair) is accepted", outcome.PairAccepted);
+            because.ItsTrue("the tag list cannot be cast back to an array and edited", !outcome.TagsAreArray);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void GetKeysAndRefuseOnceDisposed()
+    {
+        When.A<InMemoryDeviceKeyStore>("gets a key, makes undefined and invalid requests, then disposes the store",
+            () => new InMemoryDeviceKeyStore(),
+            (store) =>
+            {
+                DeviceKeyInfo created = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "phone", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Value!;
+                DeviceKeyInfo? got = store.GetAsync(created.Id).GetAwaiter().GetResult().Value;
+                DeviceKeyErrorCategory? missing = store.GetAsync(new DeviceKeyId(Scope, "nothing")).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? undefinedAccess = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Access = (DeviceKeyAccess)99, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? undefinedProtection = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = (DeviceKeyProtection)99 }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? badListScope = store.ListAsync("Not A Scope").GetAwaiter().GetResult().Error?.Category;
+                store.Dispose();
+                DeviceKeyCapabilities afterDispose = store.GetCapabilitiesAsync().GetAwaiter().GetResult();
+                return new DisposedOutcome(
+                    got != null && got.Fingerprint == created.Fingerprint && got.PublicKeySpki.SequenceEqual(created.PublicKeySpki),
+                    missing, undefinedAccess, undefinedProtection, badListScope,
+                    store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Error?.Category,
+                    store.SignAsync(created.Id, new byte[] { 1 }).GetAwaiter().GetResult().Error?.Category,
+                    store.GetAsync(created.Id).GetAwaiter().GetResult().Error?.Category,
+                    store.ListAsync(Scope).GetAwaiter().GetResult().Error?.Category,
+                    afterDispose.IsSupported);
+            })
+        .TheTest
+        .ShouldPass<DisposedOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("GetAsync returns the key as created", outcome.GotSameKey);
+            because.ItsTrue("an unknown alias is KeyNotFound", outcome.Missing == DeviceKeyErrorCategory.KeyNotFound);
+            because.ItsTrue("an undefined access value is InvalidRequest", outcome.UndefinedAccess == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("an undefined protection value is InvalidRequest", outcome.UndefinedProtection == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("listing an invalid scope is InvalidRequest", outcome.BadListScope == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("create after dispose is NotSupported", outcome.CreateAfter == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("sign after dispose is NotSupported", outcome.SignAfter == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("get after dispose is NotSupported", outcome.GetAfter == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("list after dispose is NotSupported", outcome.ListAfter == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("capabilities say unsupported after dispose", !outcome.SupportedAfter);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void ReportBadTpmRecordsAsFailuresWithoutThrowingOrDeleting()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("damages TPM key records in each way and reads them back",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                string scope = "test." + DeviceKeyId.NewAlias();
+                string[] aliases = { "empty", "null", "biometry", "undefined", "missing", "gone" };
+                try
+                {
+                    foreach (string alias in aliases)
+                    {
+                        store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = alias }).GetAwaiter().GetResult();
+                    }
+                    DeviceKeyErrorCategory? duplicate = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "empty" }).GetAwaiter().GetResult().Error?.Category;
+                    string scopeDirectory = Path.Combine(records.FullName, scope);
+                    File.WriteAllText(Path.Combine(scopeDirectory, "empty.json"), string.Empty);
+                    File.WriteAllText(Path.Combine(scopeDirectory, "null.json"), "null");
+                    File.WriteAllText(Path.Combine(scopeDirectory, "biometry.json"), "{\"CreatedUtc\":\"2026-11-26T00:00:00+00:00\",\"Access\":4}");
+                    File.WriteAllText(Path.Combine(scopeDirectory, "undefined.json"), "{\"CreatedUtc\":\"2026-11-26T00:00:00+00:00\",\"Access\":99}");
+                    File.Delete(Path.Combine(scopeDirectory, "missing.json"));
+                    using (CngKey gone = CngKey.Open("bam.devicekey." + scope + "+gone", new CngProvider(WindowsTpmDeviceKeyStore.ProviderName)))
+                    {
+                        gone.Delete();
+                    }
+                    List<DeviceKeyErrorCategory?> categories = new[] { "empty", "null", "biometry", "undefined", "missing" }
+                        .Select(alias => store.GetAsync(new DeviceKeyId(scope, alias)).GetAwaiter().GetResult().Error?.Category).ToList();
+                    DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = store.ListAsync(scope).GetAwaiter().GetResult();
+                    bool goneRecordKept = File.Exists(Path.Combine(scopeDirectory, "gone.json"));
+                    DeviceKeyErrorCategory? goneCategory = store.GetAsync(new DeviceKeyId(scope, "gone")).GetAwaiter().GetResult().Error?.Category;
+                    DeviceKeyResult<bool> goneDeleted = store.DeleteAsync(new DeviceKeyId(scope, "gone")).GetAwaiter().GetResult();
+                    return new BadRecordOutcome(duplicate, categories, listed.Succeeded, listed.Value?.Count ?? -1, goneRecordKept, goneCategory,
+                        goneDeleted.Succeeded && !File.Exists(Path.Combine(scopeDirectory, "gone.json")),
+                        Directory.GetFiles(scopeDirectory, "*.tmp").Length);
+                }
+                finally
+                {
+                    foreach (string alias in aliases)
+                    {
+                        store.DeleteAsync(new DeviceKeyId(scope, alias)).GetAwaiter().GetResult();
+                    }
+                }
+            })
+        .TheTest
+        .ShouldPass<BadRecordOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("a reused alias is AlreadyExists", outcome.Duplicate == DeviceKeyErrorCategory.AlreadyExists);
+            because.ItsTrue($"an empty, null, wrong-access, undefined-access or missing record is PlatformFailure ({string.Join(",", outcome.Categories)})", outcome.Categories.All(category => category == DeviceKeyErrorCategory.PlatformFailure));
+            because.ItsTrue("listing still succeeds and lists none of the damaged keys", outcome.ListSucceeded && outcome.Listed == 0);
+            because.ItsTrue("a read leaves a stale record in place", outcome.GoneRecordKept);
+            because.ItsTrue("a key whose TPM key is gone is KeyNotFound", outcome.GoneCategory == DeviceKeyErrorCategory.KeyNotFound);
+            because.ItsTrue("DeleteAsync removes the stale record", outcome.GoneDeleted);
+            because.ItsTrue("no temporary record files are left behind", outcome.TemporaryFiles == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void KeepNoTpmKeyWhenItsRecordCannotBeWritten()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("creates a key where a file blocks the scope's record directory, then retries",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                string scope = "test." + DeviceKeyId.NewAlias();
+                records.Create();
+                string blocker = Path.Combine(records.FullName, scope);
+                File.WriteAllText(blocker, "not a directory");
+                try
+                {
+                    DeviceKeyResult<DeviceKeyInfo> blocked = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "k1" }).GetAwaiter().GetResult();
+                    bool keyLeft = CngKey.Exists("bam.devicekey." + scope + "+k1", new CngProvider(WindowsTpmDeviceKeyStore.ProviderName));
+                    File.Delete(blocker);
+                    DeviceKeyResult<DeviceKeyInfo> retried = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "k1" }).GetAwaiter().GetResult();
+                    return new BlockedOutcome(blocked.Error?.Category, keyLeft, retried.Succeeded, store.ListAsync(scope).GetAwaiter().GetResult().Value?.Count ?? -1);
+                }
+                finally
+                {
+                    store.DeleteAsync(new DeviceKeyId(scope, "k1")).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<BlockedOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("an unwritable record is PlatformFailure, not an exception", outcome.Blocked == DeviceKeyErrorCategory.PlatformFailure);
+            because.ItsTrue("the TPM key was removed again", !outcome.KeyLeft);
+            because.ItsTrue("a retry succeeds instead of reporting AlreadyExists", outcome.RetrySucceeded);
+            because.ItsTrue("the retried key is listed", outcome.Listed == 1);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    private static void DeleteQuietly(DirectoryInfo directory)
+    {
+        try
+        {
+            if (directory.Exists)
+            {
+                directory.Delete(true);
+            }
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private static bool Verify(byte[] spki, byte[] payload, byte[] der)
@@ -285,4 +542,16 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     private sealed record PayloadOutcome(string Text, DeviceKeyErrorCategory? NewLine, DeviceKeyErrorCategory? Tab, DeviceKeyErrorCategory? RequestProof, DeviceKeyErrorCategory? Unknown, bool ChallengeMatches);
 
     private sealed record TpmOutcome(DeviceKeyErrorCategory? StrongBox, bool NoAttestation, DeviceKeyProtection Protection, bool Verified, int Listed, bool Deleted, DeviceKeyErrorCategory? AfterDelete);
+
+    private sealed record NameOutcome(List<string> WronglyAccepted, List<string> WronglyRefused, bool SixtyFiveAccepted);
+
+    private sealed record MangledOutcome(DeviceKeyErrorCategory? BadPrefix, int Thrown, int Accepted);
+
+    private sealed record SurrogateOutcome(DeviceKeyErrorCategory? LoneHigh, DeviceKeyErrorCategory? LoneLow, bool PairAccepted, bool TagsAreArray);
+
+    private sealed record DisposedOutcome(bool GotSameKey, DeviceKeyErrorCategory? Missing, DeviceKeyErrorCategory? UndefinedAccess, DeviceKeyErrorCategory? UndefinedProtection, DeviceKeyErrorCategory? BadListScope, DeviceKeyErrorCategory? CreateAfter, DeviceKeyErrorCategory? SignAfter, DeviceKeyErrorCategory? GetAfter, DeviceKeyErrorCategory? ListAfter, bool SupportedAfter);
+
+    private sealed record BadRecordOutcome(DeviceKeyErrorCategory? Duplicate, List<DeviceKeyErrorCategory?> Categories, bool ListSucceeded, int Listed, bool GoneRecordKept, DeviceKeyErrorCategory? GoneCategory, bool GoneDeleted, int TemporaryFiles);
+
+    private sealed record BlockedOutcome(DeviceKeyErrorCategory? Blocked, bool KeyLeft, bool RetrySucceeded, int Listed);
 }

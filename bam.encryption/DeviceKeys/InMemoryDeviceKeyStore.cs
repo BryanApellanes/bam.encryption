@@ -12,7 +12,7 @@ namespace Bam.Encryption.DeviceKeys;
 /// </summary>
 public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
 {
-    private static readonly IReadOnlyList<DeviceKeyAccess> Supported = new[] { DeviceKeyAccess.None };
+    private static readonly IReadOnlyList<DeviceKeyAccess> Supported = Array.AsReadOnly(new[] { DeviceKeyAccess.None });
 
     private readonly ConcurrentDictionary<DeviceKeyId, Entry> _keys = new ConcurrentDictionary<DeviceKeyId, Entry>();
 

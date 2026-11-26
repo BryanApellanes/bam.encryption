@@ -37,8 +37,11 @@ public static class CanonicalSpki
         {
             key = PublicKeyFactory.CreateKey(spki);
         }
-        catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is IOException || ex is InvalidCastException || ex is SecurityUtilityException || ex is Asn1ParsingException)
+        catch (Exception)
         {
+            // The bytes come from outside (a client's publicKeySpki), and BouncyCastle's parsers throw many types
+            // (FormatException from DecodePoint among them), so every parse failure is a refusal, as in bam.protocol's
+            // PublicKeyFingerprint.Of.
             return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, "The bytes are not a DER SubjectPublicKeyInfo.");
         }
         if (key is not ECPublicKeyParameters ecKey)

@@ -28,7 +28,7 @@ public static class TaggedPayload
     /// it. Device keys build it through bam.protocol, not here.</summary>
     public const string RequestProof = "BAM-REQUEST-PROOF-1";
 
-    private static readonly IReadOnlyList<string> DeviceTags = new[] { DeviceKey, DevicePair, DeviceRenew };
+    private static readonly IReadOnlyList<string> DeviceTags = Array.AsReadOnly(new[] { DeviceKey, DevicePair, DeviceRenew });
 
     /// <summary>
     /// The tags <see cref="Build"/> accepts.
@@ -41,7 +41,7 @@ public static class TaggedPayload
     /// <param name="tag">One of <see cref="Tags"/>.</param>
     /// <param name="fields">The fields, in the order the payload's definition lists them.</param>
     /// <returns>The payload's bytes, or <see cref="DeviceKeyErrorCategory.InvalidRequest"/> for an unknown tag, a null
-    /// field, or a field with a control character.</returns>
+    /// field, a field with a control character, or a field that is not valid UTF-16 (a lone surrogate).</returns>
     public static DeviceKeyResult<byte[]> Build(string tag, params string[] fields)
     {
         if (tag == null || !DeviceTags.Contains(tag, StringComparer.Ordinal))
@@ -63,6 +63,10 @@ public static class TaggedPayload
             {
                 return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, $"Field {index + 1} contains a control character.");
             }
+            if (HasLoneSurrogate(field))
+            {
+                return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, $"Field {index + 1} is not valid text (a lone surrogate).");
+            }
         }
         string text = tag + "\n" + string.Join("\n", fields);
         return DeviceKeyResult<byte[]>.Success(new UTF8Encoding(false, true).GetBytes(text));
@@ -74,8 +78,26 @@ public static class TaggedPayload
     /// </summary>
     /// <param name="payload">The payload's bytes.</param>
     /// <returns>The challenge.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="payload"/> is null.</exception>
     public static string ChallengeFor(byte[] payload)
     {
+        ArgumentNullException.ThrowIfNull(payload);
         return SHA256.HashData(payload).ToBase64UrlEncoded();
+    }
+
+    private static bool HasLoneSurrogate(string field)
+    {
+        for (int i = 0; i < field.Length; i++)
+        {
+            if (char.IsHighSurrogate(field[i]) && i + 1 < field.Length && char.IsLowSurrogate(field[i + 1]))
+            {
+                i++;
+            }
+            else if (char.IsSurrogate(field[i]))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }
