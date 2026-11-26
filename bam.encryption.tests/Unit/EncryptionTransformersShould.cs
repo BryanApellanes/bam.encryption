@@ -44,7 +44,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
             (aesByteTransformer) =>
             {
                 byte[] cipherData = aesByteTransformer.Transform(testDataBytes);
-                decipheredBytes = aesByteTransformer.GetReverseTransformer().ReverseTransform(cipherData);
+                decipheredBytes = Reversed(aesByteTransformer.GetReverseTransformer().ReverseTransform(cipherData));
                 string decipheredText = Encoding.UTF8.GetString(decipheredBytes);
                 return decipheredText;
             })
@@ -71,7 +71,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
             (aesBase64Transformer) =>
             {
                 base64Cipher = aesBase64Transformer.Transform(testData);
-                string deciphered = aesBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher);
+                string deciphered = Reversed(aesBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher));
                 return deciphered;
             })
         .TheTest
@@ -127,7 +127,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
             (rsaByteTransformer) =>
             {
                 cipherBytes = rsaByteTransformer.Transform(testDataBytes);
-                byte[] deciphered = rsaByteTransformer.GetReverseTransformer().ReverseTransform(cipherBytes);
+                byte[] deciphered = Reversed(rsaByteTransformer.GetReverseTransformer().ReverseTransform(cipherBytes));
                 string decipheredText = Encoding.UTF8.GetString(deciphered);
                 return decipheredText;
             })
@@ -159,7 +159,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
             (rsaBase64Transformer) =>
             {
                 base64Cipher = rsaBase64Transformer.Transform(testData);
-                string deciphered = rsaBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher);
+                string deciphered = Reversed(rsaBase64Transformer.GetReverseTransformer().ReverseTransform(base64Cipher));
                 return deciphered;
             })
         .TheTest
@@ -290,7 +290,7 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         {
             ValueTransformerPipeline<TestMonkey> pipeline = factory.Create<TestMonkey>(typeof(AesByteTransformer).Assembly, "aes");
             string cipher = pipeline.Transform(testMonkey).ToBase64();
-            TestMonkey deciphered = pipeline.GetReverseTransformer().ReverseTransform(cipher.FromBase64());
+            TestMonkey deciphered = Reversed(pipeline.GetReverseTransformer().ReverseTransform(cipher.FromBase64()));
             return deciphered;
         })
         .TheTest
@@ -303,5 +303,14 @@ public class EncryptionTransformersShould : UnitTestMenuContainer
         })
         .SoBeHappy()
         .UnlessItFailed();
+    }
+
+    /// <summary>
+    /// <c>IValueReverseTransformer.ReverseTransform</c> is declared to return a nullable value; a round trip that
+    /// yields null is a failure, so it fails here, loudly, instead of passing null on.
+    /// </summary>
+    private static T Reversed<T>(T? reversed) where T : class
+    {
+        return reversed ?? throw new InvalidOperationException("the reverse transform returned null");
     }
 }
