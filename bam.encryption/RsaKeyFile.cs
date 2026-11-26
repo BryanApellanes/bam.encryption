@@ -231,7 +231,8 @@ namespace Bam.Encryption
                 return new RSACryptoServiceProvider(keySize, RSAParams);
             }
 
-            // CspParameters and the machine key store exist only on Windows; elsewhere the key is ephemeral.
+            // CspParameters and the machine key store exist only on Windows; elsewhere use the platform RSA
+            // implementation. On every platform the key persists only through the .pub/.priv XML files.
             return new RSACryptoServiceProvider(keySize);
         }
     }

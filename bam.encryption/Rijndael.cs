@@ -126,11 +126,13 @@ namespace Bam.Encryption
         /// <summary>
         /// Derives the key the way <c>new Rfc2898DeriveBytes(sharedSecret, salt)</c> did: PBKDF2 with HMAC-SHA1 and
         /// 1000 iterations. Those were the defaults of the now obsolete constructor; they are spelled out so text
-        /// encrypted before the change still decrypts.
+        /// encrypted before the change still decrypts. The password is encoded with <see cref="Encoding.UTF8"/>, as
+        /// the old constructor did: it replaces an unpaired surrogate with U+FFFD, where the string overload of
+        /// <c>Pbkdf2</c> would throw.
         /// </summary>
         private static byte[] DeriveKey(string sharedSecret, int keyBytes)
         {
-            return Rfc2898DeriveBytes.Pbkdf2(sharedSecret, _salt, 1000, HashAlgorithmName.SHA1, keyBytes);
+            return Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(sharedSecret), _salt, 1000, HashAlgorithmName.SHA1, keyBytes);
         }
 
         private static byte[] ReadByteArray(Stream s)

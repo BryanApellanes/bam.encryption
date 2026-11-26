@@ -1,5 +1,6 @@
 using Bam.Console;
 using Bam.Test;
+using Bam.Encryption.Tests.TestClasses;
 
 namespace Bam.Encryption.Tests.Unit;
 
@@ -89,15 +90,42 @@ public class RijndaelShould : UnitTestMenuContainer
         .UnlessItFailed();
     }
 
+    /// <summary>
+    /// The obsolete Rfc2898DeriveBytes constructor encoded the password with Encoding.UTF8, which replaces an
+    /// unpaired surrogate with U+FFFD. A password like that must still work, and must derive the same key as the
+    /// same password with U+FFFD in place of the surrogate.
+    /// </summary>
+    [UnitTest]
+    public void AcceptAPasswordWithAnUnpairedSurrogate()
+    {
+        When.A<string>("encrypts with a password that holds an unpaired surrogate",
+            "a\uD800b",
+            (password) =>
+            {
+                string cipher = Rijndael.EncryptStringAES(PlainText, password);
+                return new LoneSurrogateOutcome(
+                    Rijndael.DecryptStringAES(cipher, password),
+                    Rijndael.DecryptStringAES(cipher, "a�b"));
+            })
+        .TheTest
+        .ShouldPass<LoneSurrogateOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("the cipher decrypts with the same password", PlainText.Equals(outcome.SamePassword));
+            because.ItsTrue("the key matches the replacement-character encoding the old constructor used", PlainText.Equals(outcome.ReplacementPassword));
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
     [UnitTest]
     public void RoundTripAnObjectThroughEncryptedXml()
     {
-        When.A<Bam.Encryption.Tests.TestClasses.TestMonkey>("serializes to encrypted xml with a generated key and reads it back",
-            new Bam.Encryption.Tests.TestClasses.TestMonkey { Name = "George", TailCount = 1 },
+        When.A<TestMonkey>("serializes to encrypted xml with a generated key and reads it back",
+            new TestMonkey { Name = "George", TailCount = 1 },
             (monkey) =>
             {
                 string cipher = monkey.ToBase64EncodedEncryptedXml(out AesKey key);
-                Bam.Encryption.Tests.TestClasses.TestMonkey back = Aes.Deserialize<Bam.Encryption.Tests.TestClasses.TestMonkey>(cipher, key);
+                TestMonkey back = Aes.Deserialize<TestMonkey>(cipher, key);
                 return new XmlOutcome(key.Key.Length, key.IV.Length, back.Name, back.TailCount);
             })
         .TheTest
@@ -127,6 +155,8 @@ public class RijndaelShould : UnitTestMenuContainer
     }
 
     private sealed record RoundTripOutcome(string First, string Second, string FirstDecrypted, string SecondDecrypted, string ExtensionRoundTrip);
+
+    private sealed record LoneSurrogateOutcome(string SamePassword, string ReplacementPassword);
 
     private sealed record XmlOutcome(int KeyBytes, int IvBytes, string Name, int TailCount);
 }
