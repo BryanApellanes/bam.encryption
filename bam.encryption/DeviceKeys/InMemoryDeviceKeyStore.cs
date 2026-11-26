@@ -6,8 +6,9 @@ namespace Bam.Encryption.DeviceKeys;
 /// <summary>
 /// A device-key store that keeps keys in process memory and forgets them when disposed. Protection is
 /// <see cref="DeviceKeyProtection.Software"/> and the only access policy is <see cref="DeviceKeyAccess.None"/>: there
-/// is no prompt to enforce anything stronger. Use it for tests and for demo pages scoped to a single visit, never to
-/// hold a key someone depends on.
+/// is no prompt to enforce anything stronger. Callers must opt in with
+/// <c>MinimumProtection = DeviceKeyProtection.Software</c>. Use it for tests and for demo pages scoped to a single
+/// visit, never to hold a key someone depends on.
 /// </summary>
 public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
 {
@@ -51,7 +52,7 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
     /// <inheritdoc />
     public Task<DeviceKeyResult<DeviceKeyInfo>> CreateAsync(DeviceKeyCreateRequest request, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, cancellationToken, _disposed);
+        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, DeviceKeyProtection.Software, cancellationToken, _disposed);
         if (refused != null)
         {
             return Task.FromResult(refused);

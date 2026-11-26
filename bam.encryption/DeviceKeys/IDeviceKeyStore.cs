@@ -17,7 +17,13 @@ namespace Bam.Encryption.DeviceKeys;
 /// hashes it inside, and returns a DER (X9.62) signature.</item>
 /// <item>A key's <see cref="DeviceKeyAccess"/> is fixed when it is created. A store that cannot enforce the requested
 /// access refuses with <see cref="DeviceKeyErrorCategory.NotSupported"/> rather than creating a weaker key.</item>
-/// <item><see cref="DeviceKeyInfo.Protection"/> reports what actually protects the key, never more.</item>
+/// <item><see cref="DeviceKeyInfo.Protection"/> reports what actually protects the key, never more, and a store
+/// refuses with <see cref="DeviceKeyErrorCategory.NotSupported"/> when it cannot meet
+/// <see cref="DeviceKeyCreateRequest.MinimumProtection"/>.</item>
+/// <item>Keys never leave the device: no sync, no backup that restores onto another device (on Apple,
+/// <c>ThisDeviceOnly</c>). A key that can migrate is not a device key.</item>
+/// <item>A key that needs a prompt is invalidated when the device passcode is removed; signing with it afterwards
+/// fails with <see cref="DeviceKeyErrorCategory.KeyInvalidated"/>.</item>
 /// <item>Failures are reported as a <see cref="DeviceKeyErrorCategory"/>, so callers act on the category, not on a
 /// message.</item>
 /// </list>

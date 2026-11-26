@@ -6,7 +6,7 @@ namespace Bam.Encryption.DeviceKeys;
 /// </summary>
 internal static class DeviceKeyRequests
 {
-    internal static DeviceKeyResult<T>? CheckCreate<T>(DeviceKeyCreateRequest? request, IReadOnlyList<DeviceKeyAccess> supported, CancellationToken cancellationToken, bool disposed)
+    internal static DeviceKeyResult<T>? CheckCreate<T>(DeviceKeyCreateRequest? request, IReadOnlyList<DeviceKeyAccess> supported, DeviceKeyProtection protection, CancellationToken cancellationToken, bool disposed)
     {
         DeviceKeyResult<T>? common = CheckCommon<T>(cancellationToken, disposed);
         if (common != null)
@@ -32,6 +32,14 @@ internal static class DeviceKeyRequests
         if (!supported.Contains(request.Access))
         {
             return DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.NotSupported, $"This store cannot enforce access '{request.Access}'.");
+        }
+        if (!Enum.IsDefined(request.MinimumProtection))
+        {
+            return DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.InvalidRequest, $"'{request.MinimumProtection}' is not a protection level.");
+        }
+        if (request.MinimumProtection > protection)
+        {
+            return DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.NotSupported, $"This store gives {protection} protection; the request needs at least {request.MinimumProtection}.");
         }
         return null;
     }

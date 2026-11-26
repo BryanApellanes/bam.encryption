@@ -9,10 +9,17 @@ public enum DeviceKeyAccess
     /// <summary>The key signs without a prompt.</summary>
     None = 0,
 
-    /// <summary>The person confirms presence (a touch or a click) before each signature.</summary>
+    /// <summary>The person confirms presence (a touch or a click) before each signature, without necessarily proving
+    /// who they are. Windows only today: Apple's presence flag also accepts the passcode (that is
+    /// <see cref="BiometryOrDevicePasscode"/>) and Android has no general presence check, so the mobile stores refuse
+    /// it with <see cref="DeviceKeyErrorCategory.NotSupported"/>. A caller that wants a prompt on every platform asks
+    /// for <see cref="BiometryOrDevicePasscode"/>.</summary>
     UserPresence = 1,
 
-    /// <summary>A biometric check before each signature.</summary>
+    /// <summary>A biometric check before each signature, with any enrolled biometrics, including ones enrolled after
+    /// the key was made. Android invalidates biometric keys on re-enrolment by default, so its store must turn that
+    /// off (<c>setInvalidatedByBiometricEnrollment(false)</c>), or this silently behaves like
+    /// <see cref="BiometryCurrentSet"/>.</summary>
     Biometry = 2,
 
     /// <summary>A biometric check, or the device passcode, before each signature.</summary>
@@ -21,6 +28,10 @@ public enum DeviceKeyAccess
     /// <summary>A biometric check with the biometrics enrolled when the key was created; re-enrolling invalidates
     /// the key.</summary>
     BiometryCurrentSet = 4,
+
+    /// <summary>The device passcode or PIN before each signature, with no biometrics. For people who have not
+    /// enrolled any.</summary>
+    DevicePasscode = 5,
 }
 
 /// <summary>

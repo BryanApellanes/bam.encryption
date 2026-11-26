@@ -29,7 +29,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             () => new InMemoryDeviceKeyStore(),
             (store) =>
             {
-                DeviceKeyInfo info = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope }).GetAwaiter().GetResult().Value!;
+                DeviceKeyInfo info = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Value!;
                 byte[] payload = TaggedPayload.Build(TaggedPayload.DeviceKey, "alice", info.Fingerprint, "laptop", "2027-02-24T00:00:00Z").Value!;
                 DeviceKeySignature signature = store.SignAsync(info.Id, payload).GetAwaiter().GetResult().Value!;
                 byte[] tampered = (byte[])payload.Clone();
@@ -121,23 +121,27 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             () => new InMemoryDeviceKeyStore(),
             (store) =>
             {
-                DeviceKeyId id = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "laptop" }).GetAwaiter().GetResult().Value!.Id;
+                DeviceKeyId id = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "laptop", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Value!.Id;
                 using CancellationTokenSource cancelled = new CancellationTokenSource();
                 cancelled.Cancel();
-                DeviceKeyErrorCategory? biometry = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Access = DeviceKeyAccess.Biometry }).GetAwaiter().GetResult().Error?.Category;
-                DeviceKeyErrorCategory? duplicate = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "laptop" }).GetAwaiter().GetResult().Error?.Category;
-                DeviceKeyErrorCategory? badScope = store.CreateAsync(new DeviceKeyCreateRequest { Scope = "../etc" }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? biometry = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Access = DeviceKeyAccess.Biometry, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? duplicate = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "laptop", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? defaultMinimum = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? strongBox = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = DeviceKeyProtection.StrongBox }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyErrorCategory? badScope = store.CreateAsync(new DeviceKeyCreateRequest { Scope = "../etc", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Error?.Category;
                 DeviceKeyErrorCategory? emptyData = store.SignAsync(id, Array.Empty<byte>()).GetAwaiter().GetResult().Error?.Category;
                 DeviceKeyErrorCategory? cancel = store.SignAsync(id, new byte[] { 1 }, null, cancelled.Token).GetAwaiter().GetResult().Error?.Category;
                 bool firstDelete = store.DeleteAsync(id).GetAwaiter().GetResult().Value;
                 DeviceKeyResult<bool> secondDelete = store.DeleteAsync(id).GetAwaiter().GetResult();
                 DeviceKeyErrorCategory? afterDelete = store.SignAsync(id, new byte[] { 1 }).GetAwaiter().GetResult().Error?.Category;
-                return new CategoryOutcome(biometry, duplicate, badScope, emptyData, cancel, firstDelete, secondDelete.Succeeded && !secondDelete.Value, afterDelete);
+                return new CategoryOutcome(biometry, defaultMinimum, strongBox, duplicate, badScope, emptyData, cancel, firstDelete, secondDelete.Succeeded && !secondDelete.Value, afterDelete);
             })
         .TheTest
         .ShouldPass<CategoryOutcome>((because, _, outcome) =>
         {
             because.ItsTrue("an access policy the store cannot enforce is NotSupported", outcome.Biometry == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("the default minimum (Hardware) is refused by a software store", outcome.DefaultMinimum == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("a StrongBox minimum is refused too", outcome.StrongBox == DeviceKeyErrorCategory.NotSupported);
             because.ItsTrue("a reused alias is AlreadyExists", outcome.Duplicate == DeviceKeyErrorCategory.AlreadyExists);
             because.ItsTrue("a path-like scope is InvalidRequest", outcome.BadScope == DeviceKeyErrorCategory.InvalidRequest);
             because.ItsTrue("signing nothing is InvalidRequest", outcome.EmptyData == DeviceKeyErrorCategory.InvalidRequest);
@@ -157,9 +161,9 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             () => new InMemoryDeviceKeyStore(new SteppingClock()),
             (store) =>
             {
-                store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "second-made-first" }).GetAwaiter().GetResult();
-                store.CreateAsync(new DeviceKeyCreateRequest { Scope = "bob.aaaaaaaa", Alias = "other" }).GetAwaiter().GetResult();
-                store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "a-made-later" }).GetAwaiter().GetResult();
+                store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "second-made-first", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult();
+                store.CreateAsync(new DeviceKeyCreateRequest { Scope = "bob.aaaaaaaa", Alias = "other", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult();
+                store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, Alias = "a-made-later", MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult();
                 return store.ListAsync(Scope).GetAwaiter().GetResult().Value!.Select(info => info.Id.Alias).ToList();
             })
         .TheTest
@@ -214,7 +218,8 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             (store) =>
             {
                 string scope = "test." + DeviceKeyId.NewAlias();
-                DeviceKeyResult<DeviceKeyInfo> created = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "tpm" }).GetAwaiter().GetResult();
+                DeviceKeyErrorCategory? strongBox = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "sb", MinimumProtection = DeviceKeyProtection.StrongBox }).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyResult<DeviceKeyInfo> created = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "tpm", AttestationChallenge = new byte[] { 1, 2, 3 } }).GetAwaiter().GetResult();
                 try
                 {
                     DeviceKeyInfo info = created.Value!;
@@ -223,7 +228,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                     int listed = store.ListAsync(scope).GetAwaiter().GetResult().Value!.Count;
                     bool deleted = store.DeleteAsync(info.Id).GetAwaiter().GetResult().Value;
                     DeviceKeyErrorCategory? afterDelete = store.GetAsync(info.Id).GetAwaiter().GetResult().Error?.Category;
-                    return new TpmOutcome(info.Protection, Verify(info.PublicKeySpki, payload, signature.Der), listed, deleted, afterDelete);
+                    return new TpmOutcome(strongBox, info.Attestation == null, info.Protection, Verify(info.PublicKeySpki, payload, signature.Der), listed, deleted, afterDelete);
                 }
                 finally
                 {
@@ -233,6 +238,8 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass<TpmOutcome>((because, _, outcome) =>
         {
+            because.ItsTrue("a StrongBox minimum is refused by the TPM store", outcome.StrongBox == DeviceKeyErrorCategory.NotSupported);
+            because.ItsTrue("the TPM store gives no attestation yet, even with a challenge", outcome.NoAttestation);
             because.ItsTrue("the key is reported as hardware-protected", outcome.Protection == DeviceKeyProtection.Hardware);
             because.ItsTrue("the TPM signature verifies with BouncyCastle", outcome.Verified);
             because.ItsTrue("the key is listed", outcome.Listed == 1);
@@ -273,9 +280,9 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
 
     private sealed record RefusalOutcome(DeviceKeyErrorCategory? P384, DeviceKeyErrorCategory? Rsa, DeviceKeyErrorCategory? Garbage, DeviceKeyErrorCategory? Empty);
 
-    private sealed record CategoryOutcome(DeviceKeyErrorCategory? Biometry, DeviceKeyErrorCategory? Duplicate, DeviceKeyErrorCategory? BadScope, DeviceKeyErrorCategory? EmptyData, DeviceKeyErrorCategory? Cancel, bool FirstDelete, bool SecondDeleteIdempotent, DeviceKeyErrorCategory? AfterDelete);
+    private sealed record CategoryOutcome(DeviceKeyErrorCategory? Biometry, DeviceKeyErrorCategory? DefaultMinimum, DeviceKeyErrorCategory? StrongBox, DeviceKeyErrorCategory? Duplicate, DeviceKeyErrorCategory? BadScope, DeviceKeyErrorCategory? EmptyData, DeviceKeyErrorCategory? Cancel, bool FirstDelete, bool SecondDeleteIdempotent, DeviceKeyErrorCategory? AfterDelete);
 
     private sealed record PayloadOutcome(string Text, DeviceKeyErrorCategory? NewLine, DeviceKeyErrorCategory? Tab, DeviceKeyErrorCategory? RequestProof, DeviceKeyErrorCategory? Unknown, bool ChallengeMatches);
 
-    private sealed record TpmOutcome(DeviceKeyProtection Protection, bool Verified, int Listed, bool Deleted, DeviceKeyErrorCategory? AfterDelete);
+    private sealed record TpmOutcome(DeviceKeyErrorCategory? StrongBox, bool NoAttestation, DeviceKeyProtection Protection, bool Verified, int Listed, bool Deleted, DeviceKeyErrorCategory? AfterDelete);
 }

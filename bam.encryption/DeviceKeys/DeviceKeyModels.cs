@@ -74,6 +74,35 @@ public sealed class DeviceKeyCreateRequest
 
     /// <summary>What a person must do before the key signs. Fixed for the key's life.</summary>
     public DeviceKeyAccess Access { get; set; } = DeviceKeyAccess.None;
+
+    /// <summary>The weakest protection the caller accepts. A store that cannot meet it refuses with
+    /// <see cref="DeviceKeyErrorCategory.NotSupported"/>. The default, <see cref="DeviceKeyProtection.Hardware"/>,
+    /// means a caller never gets a software key by accident: <see cref="DeviceKeyProtection.Software"/> is the
+    /// explicit opt-in, and <see cref="DeviceKeyProtection.StrongBox"/> requires a separate secure element. A store
+    /// gives the best protection it can at or above the minimum and reports it in
+    /// <see cref="DeviceKeyInfo.Protection"/>.</summary>
+    public DeviceKeyProtection MinimumProtection { get; set; } = DeviceKeyProtection.Hardware;
+
+    /// <summary>A server-issued nonce to bind into the key's attestation, or null for none. Platforms that attest
+    /// (Android) only do so when the challenge is given at create time. A store that cannot attest ignores it and
+    /// returns a null <see cref="DeviceKeyInfo.Attestation"/>.</summary>
+    public byte[]? AttestationChallenge { get; set; }
+}
+
+/// <summary>
+/// A platform's statement that a key was made in its secure hardware.
+/// </summary>
+public sealed class DeviceKeyAttestation
+{
+    /// <summary>The Android key-attestation format.</summary>
+    public const string AndroidKey = "android-key";
+
+    /// <summary>What kind of attestation this is, which tells a verifier how to check it: <see cref="AndroidKey"/>
+    /// today.</summary>
+    public string Format { get; init; } = string.Empty;
+
+    /// <summary>The certificates, DER, leaf first.</summary>
+    public IReadOnlyList<byte[]> Certificates { get; init; } = Array.Empty<byte[]>();
 }
 
 /// <summary>
@@ -99,9 +128,9 @@ public sealed class DeviceKeyInfo
     /// <summary>What a person must do before the key signs.</summary>
     public DeviceKeyAccess Access { get; init; }
 
-    /// <summary>A platform attestation chain (DER certificates, leaf first), or null when the platform cannot attest
-    /// the key. Nothing requires it.</summary>
-    public IReadOnlyList<byte[]>? Attestation { get; init; }
+    /// <summary>The platform's attestation of the key, or null when it cannot attest one (Apple, and Windows for now)
+    /// or no <see cref="DeviceKeyCreateRequest.AttestationChallenge"/> was given. Nothing requires it.</summary>
+    public DeviceKeyAttestation? Attestation { get; init; }
 }
 
 /// <summary>

@@ -14,6 +14,8 @@ namespace Bam.Encryption.DeviceKeys;
 /// <para>The only access policy for now is <see cref="DeviceKeyAccess.None"/>. Windows Hello prompts on TPM keys
 /// (the provider's UI policy) are a later addition; until then the store refuses anything stronger rather than
 /// creating a key that signs without the prompt the caller asked for.</para>
+/// <para>No attestation yet: TPM key attestation through the provider is separate work, so
+/// <see cref="DeviceKeyInfo.Attestation"/> is null even when a challenge is given.</para>
 /// <para>CNG cannot list a provider's keys without native calls, and it keeps no creation time, so the store writes
 /// one small public record per key beside the key: its creation time and access policy, nothing secret. A key whose
 /// record is missing is not listed; one whose TPM key is gone is listed by nobody and its record is removed on the
@@ -69,7 +71,7 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// <inheritdoc />
     public Task<DeviceKeyResult<DeviceKeyInfo>> CreateAsync(DeviceKeyCreateRequest request, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>();
+        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, DeviceKeyProtection.Hardware, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>();
         if (refused != null)
         {
             return Task.FromResult(refused);
