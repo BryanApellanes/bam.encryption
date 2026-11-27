@@ -49,3 +49,19 @@ ISignatureVerification result = verifier.Verify(payload, signatureBytes, publicK
 
 Two PEM strings can encode the same key differently (a named curve OID versus explicit curve
 parameters, for example). Compare the parsed key material, not the PEM text.
+
+## Keeping named keys in a directory
+
+`FileNamedKeyStorage` is an `INamedKeyStorage` that keeps each key as a file, `<name>.pem`, under
+one directory, so a host's keys survive a restart.
+
+```csharp
+INamedKeyStorage keys = new FileNamedKeyStorage("/var/lib/myhost/keys");
+keys.SaveNamedKey("server-signing", pemBytes);
+byte[]? pem = keys.GetNamedKey("server-signing");   // null when the name was never saved
+```
+
+The files are not encrypted. On Unix the directory is created mode 0700 and each file 0600. On
+Windows the directory inherits its parent's ACL, so put it under a user profile or a secret
+volume. Characters that are not valid in a file name, and both path separators, become `_`, so a
+name cannot reach outside the directory.
