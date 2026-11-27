@@ -49,3 +49,34 @@ ISignatureVerification result = verifier.Verify(payload, signatureBytes, publicK
 
 Two PEM strings can encode the same key differently (a named curve OID versus explicit curve
 parameters, for example). Compare the parsed key material, not the PEM text.
+
+## Keeping named keys in a directory
+
+`FileNamedKeyStorage` is an `INamedKeyStorage` that keeps each key as a file, `<name>.pem`, under
+one directory, so a host's keys survive a restart.
+
+```csharp
+INamedKeyStorage keys = new FileNamedKeyStorage("/var/lib/myhost/keys");
+keys.SaveNamedKey("server-signing", pemBytes);
+byte[]? pem = keys.GetNamedKey("server-signing");   // null when the name was never saved
+```
+
+The files are not encrypted. On Unix the directory is created mode 0700 and each file 0600. On
+Windows the directory inherits its parent's ACL, so put it under a user profile or a secret
+volume. An existing directory is trusted as found: its mode is tightened, but a key file already
+in it is read as the host's key. Use a directory no other user could write to before the host
+first ran.
+
+Both path separators, `: * ? " < > |` and control characters become `_` in the file name, on
+every platform, so a name cannot reach outside the directory and gives the same file wherever the
+directory is read. Two names that differ only in those characters share a file, so use names the
+host controls.
+
+A save writes a new temporary file and moves it over the key file. A reader never sees a partly
+written key, and saves of one name from several threads or processes do not corrupt it; the last
+one wins.
+
+On Windows a key file cannot be replaced while anything has it open. A save waits for a gap, for
+under a second, and then throws `UnauthorizedAccessException`, leaving the old key in place. A
+host that reads one key from several threads without pause can make a save of that key fail, so
+read a key once and keep it. Unix has no such limit.
