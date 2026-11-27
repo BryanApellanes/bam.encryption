@@ -75,3 +75,8 @@ host controls.
 A save writes a new temporary file and moves it over the key file. A reader never sees a partly
 written key, and saves of one name from several threads or processes do not corrupt it; the last
 one wins.
+
+On Windows a key file cannot be replaced while anything has it open. A save waits for a gap, for
+under a second, and then throws `UnauthorizedAccessException`, leaving the old key in place. A
+host that reads one key from several threads without pause can make a save of that key fail, so
+read a key once and keep it. Unix has no such limit.

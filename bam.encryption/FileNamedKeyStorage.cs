@@ -60,8 +60,19 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
     /// moved over the key file, so a reader never sees a partly written key and two saves of one
     /// name do not write into each other. The last move wins. The temporary file is created only
     /// if no file of that name exists, so a file or link planted under its name is never written
-    /// through.
+    /// through. When the save fails the temporary file is deleted and the key file is left as it
+    /// was.
+    /// <para>
+    /// On Windows the key file cannot be replaced while anything has it open. The save waits for a
+    /// gap, for under a second, and then throws. A host that reads one key from several threads
+    /// without pause can make a save of that key fail there; read the key once and keep it, or
+    /// try the save again.
+    /// </para>
     /// </remarks>
+    /// <exception cref="UnauthorizedAccessException">
+    /// On Windows, the key file stayed open elsewhere for as long as the save kept trying.
+    /// </exception>
+    /// <exception cref="IOException">The key could not be written or moved into place.</exception>
     public bool SaveNamedKey(string keyName, byte[] keyBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(keyName);
@@ -112,7 +123,9 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
         {
             try
             {
-                // Sharing delete lets a save replace the file on Windows while this read has it open.
+                // Shares everything, so this read never makes another reader's open fail. It does
+                // not help a save on Windows: a move over a file that anyone has open is refused
+                // there, whatever the reader shares.
                 using FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 using MemoryStream bytes = new MemoryStream();
                 stream.CopyTo(bytes);
@@ -151,9 +164,10 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
     }
 
     /// <summary>
-    /// Moves the temporary file over the key file. On Windows the move is refused while another
-    /// save is replacing the same file or a reader that does not share delete has it open, so it
-    /// is tried again for a short while before the failure is let through.
+    /// Moves the temporary file over the key file. On Windows a move over a file that anyone has
+    /// open is refused, whatever that reader or writer shares, so the move needs an instant in
+    /// which the key file is closed. It is tried again for under a second, and then the failure
+    /// is let through.
     /// </summary>
     private static void MoveIntoPlace(string temporary, string path)
     {

@@ -288,6 +288,45 @@ public class FileNamedKeyStorageShould : UnitTestMenuContainer
     }
 
     [UnitTest]
+    public void LeaveNoTemporaryFileWhenASaveFails()
+    {
+        When.A<FileNamedKeyStorageShould>("saves a key whose file name is taken by a directory", (test) =>
+            {
+                string root = NewRoot();
+                try
+                {
+                    FileNamedKeyStorage storage = new FileNamedKeyStorage(root);
+                    Directory.CreateDirectory(Path.Combine(root, "blocked.pem"));
+                    string thrown = string.Empty;
+                    try
+                    {
+                        storage.SaveNamedKey("blocked", new byte[] { 1, 2, 3 });
+                    }
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                        thrown = exception.GetType().Name;
+                    }
+
+                    string[] entries = Directory.GetFileSystemEntries(root).Select(path => Path.GetFileName(path)).ToArray();
+                    return new FailedSaveOutcome(thrown, string.Join(",", entries), Directory.Exists(Path.Combine(root, "blocked.pem")));
+                }
+                finally
+                {
+                    Remove(root);
+                }
+            })
+            .TheTest
+            .ShouldPass<FailedSaveOutcome>((because, outcome) =>
+            {
+                because.ItsTrue("the save threw: " + outcome.Thrown, outcome.Thrown.Length > 0);
+                because.ItsTrue("the root holds only what was there before: " + outcome.Entries, outcome.Entries == "blocked.pem");
+                because.ItsTrue("what was in the way is untouched", outcome.BlockerStillThere);
+            })
+            .SoBeHappy()
+            .UnlessItFailed();
+    }
+
+    [UnitTest]
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     public void KeepKeysOwnerOnlyOnUnix()
     {
@@ -375,6 +414,8 @@ public class FileNamedKeyStorageShould : UnitTestMenuContainer
     private sealed record NamingOutcome(string Files, bool ReadBack, string Replaced);
 
     private sealed record ConcurrencyOutcome(int FailedSaves, int TornReads, int Reads, string Files, string FirstFailure);
+
+    private sealed record FailedSaveOutcome(string Thrown, string Entries, bool BlockerStillThere);
 
     private sealed record ModeOutcome(UnixFileMode Directory, UnixFileMode FreshFile, UnixFileMode OverLooseFile);
 
