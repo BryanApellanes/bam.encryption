@@ -18,7 +18,7 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
 
     private readonly TimeProvider _clock;
 
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// Creates an empty store that uses the system clock.
@@ -85,9 +85,9 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
             byte[] der = entry.Key.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence);
             return Task.FromResult(DeviceKeyResult<DeviceKeySignature>.Success(new DeviceKeySignature { Id = id, Der = der }));
         }
-        catch (ObjectDisposedException)
+        catch (Exception ex) when (ex is ObjectDisposedException || ex is CryptographicException)
         {
-            // deleted while this call was signing
+            // deleted while this call was signing (the handle is closed or already invalid)
             return Task.FromResult(DeviceKeyRequests.NotFound<DeviceKeySignature>(id));
         }
     }

@@ -16,6 +16,13 @@ namespace Bam.Encryption.DeviceKeys;
 /// </summary>
 public static class CanonicalSpki
 {
+    /// <summary>
+    /// The longest input <see cref="Canonicalize"/> parses. The longest real P-256 encoding (explicit curve
+    /// parameters with a seed) is about 335 bytes. The limit is checked before parsing, because BouncyCastle's parser
+    /// recurses once per nested element and deeply nested input would overflow the stack and end the process.
+    /// </summary>
+    public const int MaximumLength = 512;
+
     private static readonly DerObjectIdentifier P256Oid = new DerObjectIdentifier(DeviceKeyAlgorithm.CurveOid);
 
     private static readonly X9ECParameters P256 = ECNamedCurveTable.GetByOid(P256Oid);
@@ -25,12 +32,16 @@ public static class CanonicalSpki
     /// </summary>
     /// <param name="spki">The public key.</param>
     /// <returns>The canonical DER, or <see cref="DeviceKeyErrorCategory.InvalidRequest"/> when the bytes are not a
-    /// valid P-256 public key.</returns>
+    /// valid P-256 public key or are longer than <see cref="MaximumLength"/>.</returns>
     public static DeviceKeyResult<byte[]> Canonicalize(byte[] spki)
     {
         if (spki == null || spki.Length == 0)
         {
             return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, "No public key was given.");
+        }
+        if (spki.Length > MaximumLength)
+        {
+            return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, $"The public key is {spki.Length} bytes; a P-256 key is at most {MaximumLength}.");
         }
         AsymmetricKeyParameter key;
         try

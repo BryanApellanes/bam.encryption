@@ -281,10 +281,11 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             {
                 using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
                 byte[] valid = key.ExportSubjectPublicKeyInfo();
+                string original = CanonicalSpki.FingerprintOf(valid).Value!;
                 byte[] badPrefix = (byte[])valid.Clone();
                 badPrefix[valid.Length - 65] = 0xB8;
                 int thrown = 0;
-                int accepted = 0;
+                int wrongFingerprint = 0;
                 for (int position = 0; position < valid.Length; position++)
                 {
                     for (int value = 0; value < 256; value++)
@@ -297,9 +298,10 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                         mutated[position] = (byte)value;
                         try
                         {
-                            if (CanonicalSpki.Canonicalize(mutated).Succeeded)
+                            DeviceKeyResult<string> fingerprint = CanonicalSpki.FingerprintOf(mutated);
+                            if (fingerprint.Succeeded && fingerprint.Value != original)
                             {
-                                accepted++;
+                                wrongFingerprint++;
                             }
                         }
                         catch (Exception)
@@ -308,13 +310,14 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                         }
                     }
                 }
-                return new MangledOutcome(CanonicalSpki.Canonicalize(badPrefix).Error?.Category, thrown, accepted);
+                return new MangledOutcome(CanonicalSpki.Canonicalize(badPrefix).Error?.Category, thrown, wrongFingerprint);
             })
         .TheTest
         .ShouldPass<MangledOutcome>((because, _, outcome) =>
         {
             because.ItsTrue("a bad point prefix (0xB8) is InvalidRequest", outcome.BadPrefix == DeviceKeyErrorCategory.InvalidRequest);
             because.ItsTrue($"no mutation throws ({outcome.Thrown} did)", outcome.Thrown == 0);
+            because.ItsTrue($"a mutation that is accepted is the same key ({outcome.WrongFingerprint} were not)", outcome.WrongFingerprint == 0);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -398,7 +401,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             (store) =>
             {
                 string scope = "test." + DeviceKeyId.NewAlias();
-                string[] aliases = { "empty", "null", "biometry", "undefined", "missing", "gone" };
+                string[] aliases = { "empty", "null", "biometry", "undefined", "missing", "nocreated", "gone" };
                 try
                 {
                     foreach (string alias in aliases)
@@ -412,11 +415,12 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                     File.WriteAllText(Path.Combine(scopeDirectory, "biometry.json"), "{\"CreatedUtc\":\"2026-11-26T00:00:00+00:00\",\"Access\":4}");
                     File.WriteAllText(Path.Combine(scopeDirectory, "undefined.json"), "{\"CreatedUtc\":\"2026-11-26T00:00:00+00:00\",\"Access\":99}");
                     File.Delete(Path.Combine(scopeDirectory, "missing.json"));
+                    File.WriteAllText(Path.Combine(scopeDirectory, "nocreated.json"), "{\"Access\":0}");
                     using (CngKey gone = CngKey.Open("bam.devicekey." + scope + "+gone", new CngProvider(WindowsTpmDeviceKeyStore.ProviderName)))
                     {
                         gone.Delete();
                     }
-                    List<DeviceKeyErrorCategory?> categories = new[] { "empty", "null", "biometry", "undefined", "missing" }
+                    List<DeviceKeyErrorCategory?> categories = new[] { "empty", "null", "biometry", "undefined", "missing", "nocreated" }
                         .Select(alias => store.GetAsync(new DeviceKeyId(scope, alias)).GetAwaiter().GetResult().Error?.Category).ToList();
                     DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = store.ListAsync(scope).GetAwaiter().GetResult();
                     bool goneRecordKept = File.Exists(Path.Combine(scopeDirectory, "gone.json"));
@@ -493,6 +497,259 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         DeleteQuietly(records);
     }
 
+    [UnitTest]
+    public void RefuseOversizedAndDeeplyNestedKeysWithoutOverflowingTheStack()
+    {
+        When.A<string>("canonicalises a padded key and nested ASN.1 under and over the length limit",
+            "P-256",
+            (_) =>
+            {
+                using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+                byte[] valid = key.ExportSubjectPublicKeyInfo();
+                byte[] padded = new byte[CanonicalSpki.MaximumLength + 1];
+                Array.Copy(valid, padded, valid.Length);
+                return new NestedOutcome(
+                    CanonicalSpki.Canonicalize(padded).Error?.Category,
+                    CanonicalSpki.Canonicalize(Nested(20 * 1024)).Error?.Category,
+                    CanonicalSpki.Canonicalize(Nested(CanonicalSpki.MaximumLength)).Error?.Category,
+                    CanonicalSpki.FingerprintOf(Nested(16 * 1024)).Error?.Category);
+            })
+        .TheTest
+        .ShouldPass<NestedOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("a key one byte over the limit is InvalidRequest", outcome.OverLimit == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("20 KB of nested sequences is InvalidRequest, and the process survives", outcome.DeepNested == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("nested input at the limit is InvalidRequest", outcome.AtLimitNested == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("FingerprintOf refuses nested input too", outcome.FingerprintNested == DeviceKeyErrorCategory.InvalidRequest);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void ReportASignRacingADeleteAsKeyNotFound()
+    {
+        When.A<InMemoryDeviceKeyStore>("signs on one thread while another deletes the key, many times",
+            () => new InMemoryDeviceKeyStore(),
+            (store) =>
+            {
+                int thrown = 0;
+                int unexpected = 0;
+                byte[] payload = new byte[] { 1, 2, 3 };
+                for (int i = 0; i < 2000; i++)
+                {
+                    DeviceKeyId id = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Value!.Id;
+                    Task<DeviceKeyResult<DeviceKeySignature>> signing = Task.Run(() => store.SignAsync(id, payload));
+                    store.DeleteAsync(id).GetAwaiter().GetResult();
+                    try
+                    {
+                        DeviceKeyResult<DeviceKeySignature> signed = signing.GetAwaiter().GetResult();
+                        if (!signed.Succeeded && signed.Error?.Category != DeviceKeyErrorCategory.KeyNotFound)
+                        {
+                            unexpected++;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        thrown++;
+                    }
+                }
+                return new RaceOutcome(thrown, unexpected);
+            })
+        .TheTest
+        .ShouldPass<RaceOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"no sign throws ({outcome.Thrown} did)", outcome.Thrown == 0);
+            because.ItsTrue($"a sign that loses the race is KeyNotFound ({outcome.Unexpected} were something else)", outcome.Unexpected == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void GiveOneKeyWhenTwoTpmStoresCreateTheSameId()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("starts two store instances on one record directory creating one id, several rounds",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (first) =>
+            {
+                WindowsTpmDeviceKeyStore second = new WindowsTpmDeviceKeyStore(records, TimeProvider.System);
+                string scope = "test." + DeviceKeyId.NewAlias();
+                List<string> problems = new List<string>();
+                for (int round = 0; round < 4; round++)
+                {
+                    DeviceKeyId id = new DeviceKeyId(scope, "race" + round);
+                    try
+                    {
+                        using Barrier barrier = new Barrier(2);
+                        Task<DeviceKeyResult<DeviceKeyInfo>>[] creates = new[] { first, second }
+                            .Select(store => Task.Run(() =>
+                            {
+                                barrier.SignalAndWait();
+                                return store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = id.Alias }).GetAwaiter().GetResult();
+                            }))
+                            .ToArray();
+                        Task.WaitAll(creates);
+                        List<DeviceKeyResult<DeviceKeyInfo>> results = creates.Select(task => task.Result).ToList();
+                        List<DeviceKeyResult<DeviceKeyInfo>> winners = results.Where(result => result.Succeeded).ToList();
+                        if (winners.Count != 1 || results.Count(result => result.Error?.Category == DeviceKeyErrorCategory.AlreadyExists) != 1)
+                        {
+                            problems.Add($"round {round}: {string.Join(", ", results.Select(result => result.Succeeded ? "Success" : $"{result.Error?.Category} ({result.Error?.Message})"))}");
+                            continue;
+                        }
+                        DeviceKeyResult<DeviceKeyInfo> got = first.GetAsync(id).GetAwaiter().GetResult();
+                        DeviceKeyResult<DeviceKeySignature> signed = second.SignAsync(id, new byte[] { 1 }).GetAwaiter().GetResult();
+                        if (!got.Succeeded || got.Value!.Fingerprint != winners[0].Value!.Fingerprint || !signed.Succeeded || !Verify(winners[0].Value!.PublicKeySpki, new byte[] { 1 }, signed.Value!.Der))
+                        {
+                            problems.Add($"round {round}: the winner's key is not the one in the TPM ({got.Error?.Category})");
+                        }
+                    }
+                    finally
+                    {
+                        first.DeleteAsync(id).GetAwaiter().GetResult();
+                    }
+                }
+                return problems;
+            })
+        .TheTest
+        .ShouldPass<List<string>>((because, _, problems) =>
+        {
+            because.ItsTrue($"every round gives exactly one Success, one AlreadyExists, and the winner's key signs ({string.Join("; ", problems)})", problems.Count == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void NeverReportABusyTpmAsUnsupported()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("signs with one key from 8 threads, 6 times each, while asking for capabilities",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                DeviceKeyInfo info = store.CreateAsync(new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "busy" }).GetAwaiter().GetResult().Value!;
+                try
+                {
+                    byte[] payload = TaggedPayload.Build(TaggedPayload.DeviceRenew, "alice", info.Fingerprint).Value!;
+                    int notSupported = 0;
+                    int thrown = 0;
+                    int verified = 0;
+                    Task[] threads = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+                    {
+                        for (int i = 0; i < 6; i++)
+                        {
+                            try
+                            {
+                                DeviceKeyResult<DeviceKeySignature> signed = store.SignAsync(info.Id, payload).GetAwaiter().GetResult();
+                                if (signed.Error?.Category == DeviceKeyErrorCategory.NotSupported || !store.GetCapabilitiesAsync().GetAwaiter().GetResult().IsSupported)
+                                {
+                                    Interlocked.Increment(ref notSupported);
+                                }
+                                if (signed.Succeeded && Verify(info.PublicKeySpki, payload, signed.Value!.Der))
+                                {
+                                    Interlocked.Increment(ref verified);
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                Interlocked.Increment(ref thrown);
+                            }
+                        }
+                    })).ToArray();
+                    Task.WaitAll(threads);
+                    return new BusyOutcome(notSupported, thrown, verified);
+                }
+                finally
+                {
+                    store.DeleteAsync(info.Id).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<BusyOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"a busy TPM is never NotSupported ({outcome.NotSupported} were)", outcome.NotSupported == 0);
+            because.ItsTrue($"nothing throws ({outcome.Thrown} did)", outcome.Thrown == 0);
+            because.ItsTrue($"the signatures verify ({outcome.Verified} of 48)", outcome.Verified == 48);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void CreateAgainOverARecordWhoseTpmKeyIsGone()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("creates a key, removes it from the TPM behind the store's back, and creates the same id again",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                DeviceKeyId id = new DeviceKeyId("test." + DeviceKeyId.NewAlias(), "stale");
+                try
+                {
+                    DeviceKeyInfo before = store.CreateAsync(new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias }).GetAwaiter().GetResult().Value!;
+                    using (CngKey gone = CngKey.Open("bam.devicekey." + id.Scope + "+" + id.Alias, new CngProvider(WindowsTpmDeviceKeyStore.ProviderName)))
+                    {
+                        gone.Delete();
+                    }
+                    DeviceKeyErrorCategory? whileStale = store.GetAsync(id).GetAwaiter().GetResult().Error?.Category;
+                    DeviceKeyResult<DeviceKeyInfo> again = store.CreateAsync(new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias }).GetAwaiter().GetResult();
+                    DeviceKeyResult<DeviceKeyInfo> got = store.GetAsync(id).GetAwaiter().GetResult();
+                    DeviceKeyResult<DeviceKeySignature> signed = store.SignAsync(id, new byte[] { 7 }).GetAwaiter().GetResult();
+                    return new StaleOutcome(whileStale, again.Succeeded, again.Value?.Fingerprint != before.Fingerprint,
+                        got.Succeeded && got.Value!.Fingerprint == again.Value?.Fingerprint,
+                        signed.Succeeded && Verify(again.Value!.PublicKeySpki, new byte[] { 7 }, signed.Value!.Der),
+                        store.ListAsync(id.Scope).GetAwaiter().GetResult().Value?.Count ?? -1);
+                }
+                finally
+                {
+                    store.DeleteAsync(id).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<StaleOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("while stale, the key is KeyNotFound", outcome.WhileStale == DeviceKeyErrorCategory.KeyNotFound);
+            because.ItsTrue("creating the id again succeeds", outcome.Created);
+            because.ItsTrue("it is a new key", outcome.NewKey);
+            because.ItsTrue("GetAsync reports the new key", outcome.GotNewKey);
+            because.ItsTrue("the new key signs", outcome.Signs);
+            because.ItsTrue("only the new key is listed", outcome.Listed == 1);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    private static byte[] Nested(int length)
+    {
+        byte[] nested = new byte[length];
+        for (int i = 0; i + 1 < length; i += 2)
+        {
+            nested[i] = 0x30;
+            nested[i + 1] = 0x80;
+        }
+        return nested;
+    }
+
     private static void DeleteQuietly(DirectoryInfo directory)
     {
         try
@@ -545,13 +802,21 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
 
     private sealed record NameOutcome(List<string> WronglyAccepted, List<string> WronglyRefused, bool SixtyFiveAccepted);
 
-    private sealed record MangledOutcome(DeviceKeyErrorCategory? BadPrefix, int Thrown, int Accepted);
+    private sealed record MangledOutcome(DeviceKeyErrorCategory? BadPrefix, int Thrown, int WrongFingerprint);
 
     private sealed record SurrogateOutcome(DeviceKeyErrorCategory? LoneHigh, DeviceKeyErrorCategory? LoneLow, bool PairAccepted, bool TagsAreArray);
 
     private sealed record DisposedOutcome(bool GotSameKey, DeviceKeyErrorCategory? Missing, DeviceKeyErrorCategory? UndefinedAccess, DeviceKeyErrorCategory? UndefinedProtection, DeviceKeyErrorCategory? BadListScope, DeviceKeyErrorCategory? CreateAfter, DeviceKeyErrorCategory? SignAfter, DeviceKeyErrorCategory? GetAfter, DeviceKeyErrorCategory? ListAfter, bool SupportedAfter);
 
     private sealed record BadRecordOutcome(DeviceKeyErrorCategory? Duplicate, List<DeviceKeyErrorCategory?> Categories, bool ListSucceeded, int Listed, bool GoneRecordKept, DeviceKeyErrorCategory? GoneCategory, bool GoneDeleted, int TemporaryFiles);
+
+    private sealed record NestedOutcome(DeviceKeyErrorCategory? OverLimit, DeviceKeyErrorCategory? DeepNested, DeviceKeyErrorCategory? AtLimitNested, DeviceKeyErrorCategory? FingerprintNested);
+
+    private sealed record RaceOutcome(int Thrown, int Unexpected);
+
+    private sealed record BusyOutcome(int NotSupported, int Thrown, int Verified);
+
+    private sealed record StaleOutcome(DeviceKeyErrorCategory? WhileStale, bool Created, bool NewKey, bool GotNewKey, bool Signs, int Listed);
 
     private sealed record BlockedOutcome(DeviceKeyErrorCategory? Blocked, bool KeyLeft, bool RetrySucceeded, int Listed);
 }
