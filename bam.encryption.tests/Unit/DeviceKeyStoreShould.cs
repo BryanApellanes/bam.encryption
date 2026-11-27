@@ -406,7 +406,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                 {
                     foreach (string alias in aliases)
                     {
-                        store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = alias }).GetAwaiter().GetResult();
+                        Created(store, new DeviceKeyCreateRequest { Scope = scope, Alias = alias });
                     }
                     DeviceKeyErrorCategory? duplicate = store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "empty" }).GetAwaiter().GetResult().Error?.Category;
                     string scopeDirectory = Path.Combine(records.FullName, scope);
@@ -640,7 +640,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
             (store) =>
             {
-                DeviceKeyInfo info = store.CreateAsync(new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "busy" }).GetAwaiter().GetResult().Value!;
+                DeviceKeyInfo info = Created(store, new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "busy" });
                 try
                 {
                     byte[] payload = TaggedPayload.Build(TaggedPayload.DeviceRenew, "alice", info.Fingerprint).Value!;
@@ -705,7 +705,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                 DeviceKeyId id = new DeviceKeyId("test." + DeviceKeyId.NewAlias(), "stale");
                 try
                 {
-                    DeviceKeyInfo before = store.CreateAsync(new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias }).GetAwaiter().GetResult().Value!;
+                    DeviceKeyInfo before = Created(store, new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias });
                     using (CngKey gone = CngKey.Open("bam.devicekey." + id.Scope + "+" + id.Alias, new CngProvider(WindowsTpmDeviceKeyStore.ProviderName)))
                     {
                         gone.Delete();
@@ -754,9 +754,9 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
             {
                 string scope = "test." + DeviceKeyId.NewAlias();
                 List<DeviceKeyInfo> created = Enumerable.Range(0, 3)
-                    .Select(i => store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "k" + i }).GetAwaiter().GetResult().Value!)
+                    .Select(i => Created(store, new DeviceKeyCreateRequest { Scope = scope, Alias = "k" + i }))
                     .ToList();
-                List<System.Diagnostics.Process> noise = Enumerable.Range(0, 6).Select(_ => StartTpmNoise(TimeSpan.FromSeconds(12))).ToList();
+                List<TpmNoise> noise = Enumerable.Range(0, 6).Select(_ => StartTpmNoise(TimeSpan.FromSeconds(12))).ToList();
                 try
                 {
                     int complete = 0;
@@ -807,17 +807,17 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
                 }
                 finally
                 {
-                    foreach (System.Diagnostics.Process process in noise)
+                    foreach (TpmNoise process in noise)
                     {
-                        if (!process.WaitForExit(30000))
-                        {
-                            process.Kill(true);
-                        }
-                        process.Dispose();
+                        process.Stop();
                     }
                     foreach (DeviceKeyInfo info in created)
                     {
-                        store.DeleteAsync(info.Id).GetAwaiter().GetResult();
+                        DeviceKeyResult<bool> deleted = store.DeleteAsync(info.Id).GetAwaiter().GetResult();
+                        if (!deleted.Succeeded)
+                        {
+                            throw new InvalidOperationException($"test key {info.Id.Alias} was not deleted: {deleted.Error?.Category} {deleted.Error?.Message}");
+                        }
                     }
                 }
             })
@@ -863,7 +863,7 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     /// <paramref name="duration"/> and deletes the key when it finishes, the way another program would load the TPM.
     /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static System.Diagnostics.Process StartTpmNoise(TimeSpan duration)
+    private static TpmNoise StartTpmNoise(TimeSpan duration)
     {
         string name = "bam-test-noise-" + Guid.NewGuid().ToString("N");
         string script = "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Core; "
@@ -880,7 +880,186 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         start.ArgumentList.Add("-NonInteractive");
         start.ArgumentList.Add("-Command");
         start.ArgumentList.Add(script);
-        return System.Diagnostics.Process.Start(start)!;
+        return new TpmNoise(System.Diagnostics.Process.Start(start)!, name);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void FailAListRatherThanShortenItWhenTheGateCannotBeOpened()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        TpmGateSettings squatted = TestGate();
+        When.A<WindowsTpmDeviceKeyStore>("lists a scope with one key while an event holds the gate's name",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                DeviceKeyInfo key = Created(store, new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "k1" });
+                try
+                {
+                    using EventWaitHandle squatter = new EventWaitHandle(false, EventResetMode.ManualReset, squatted.GateName);
+                    WindowsTpmDeviceKeyStore gated = new WindowsTpmDeviceKeyStore(records, TimeProvider.System, squatted);
+                    DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = gated.ListAsync(key.Id.Scope).GetAwaiter().GetResult();
+                    DeviceKeyCapabilities gatedCapabilities = gated.GetCapabilitiesAsync().GetAwaiter().GetResult();
+                    return new GateOutcome(listed.Succeeded, listed.Error?.Category, gatedCapabilities.IsSupported, TimeSpan.Zero);
+                }
+                finally
+                {
+                    store.DeleteAsync(key.Id).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<GateOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"the list fails instead of succeeding without the key (succeeded: {outcome.ListSucceeded})", !outcome.ListSucceeded);
+            because.ItsTrue($"the list fails as PlatformFailure (was {outcome.ListCategory})", outcome.ListCategory == DeviceKeyErrorCategory.PlatformFailure);
+            because.ItsTrue("an unusable gate is not reported as no TPM", outcome.Supported);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void FailAListAndStaySupportedWhileAnotherThreadHoldsTheGate()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        TpmGateSettings held = TestGate();
+        When.A<WindowsTpmDeviceKeyStore>("lists and probes while another thread holds the gate",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                DeviceKeyInfo key = Created(store, new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "k1" });
+                try
+                {
+                    using HeldMutex holder = new HeldMutex(held.GateName);
+                    WindowsTpmDeviceKeyStore gated = new WindowsTpmDeviceKeyStore(records, TimeProvider.System, held);
+                    System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+                    DeviceKeyCapabilities gatedCapabilities = gated.GetCapabilitiesAsync().GetAwaiter().GetResult();
+                    TimeSpan probeTook = watch.Elapsed;
+                    DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = gated.ListAsync(key.Id.Scope).GetAwaiter().GetResult();
+                    return new GateOutcome(listed.Succeeded, listed.Error?.Category, gatedCapabilities.IsSupported, probeTook);
+                }
+                finally
+                {
+                    store.DeleteAsync(key.Id).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<GateOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"the list fails as PlatformFailure (succeeded: {outcome.ListSucceeded}, category {outcome.ListCategory})", !outcome.ListSucceeded && outcome.ListCategory == DeviceKeyErrorCategory.PlatformFailure);
+            because.ItsTrue("a held gate is not reported as no TPM", outcome.Supported);
+            because.ItsTrue($"the probe waits one gate timeout, not ten ({outcome.Took.TotalMilliseconds:0} ms)", outcome.Took < TimeSpan.FromSeconds(3));
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void WaitForAHeldClaimThenFailWithoutCreating()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("creates an id whose claim another thread holds, then again after it lets go",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System, TestGate()),
+            (store) =>
+            {
+                DeviceKeyId id = new DeviceKeyId("test." + DeviceKeyId.NewAlias(), "k1");
+                DeviceKeyResult<DeviceKeyInfo> whileHeld;
+                using (HeldMutex holder = new HeldMutex(WindowsTpmDeviceKeyStore.ClaimNameOf(id)))
+                {
+                    whileHeld = store.CreateAsync(new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias }).GetAwaiter().GetResult();
+                }
+                DeviceKeyErrorCategory? afterHeld = store.GetAsync(id).GetAwaiter().GetResult().Error?.Category;
+                DeviceKeyResult<DeviceKeyInfo> released = store.CreateAsync(new DeviceKeyCreateRequest { Scope = id.Scope, Alias = id.Alias }).GetAwaiter().GetResult();
+                store.DeleteAsync(id).GetAwaiter().GetResult();
+                return new ClaimOutcome(whileHeld.Error?.Category, afterHeld, released.Succeeded);
+            })
+        .TheTest
+        .ShouldPass<ClaimOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"a held claim is PlatformFailure, not AlreadyExists (was {outcome.WhileHeld})", outcome.WhileHeld == DeviceKeyErrorCategory.PlatformFailure);
+            because.ItsTrue($"nothing was created while the claim was held ({outcome.AfterHeld})", outcome.AfterHeld == DeviceKeyErrorCategory.KeyNotFound);
+            because.ItsTrue("the create works once the claim is free", outcome.CreatedAfterRelease);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void StopWaitingForTheGateWhenCancelled()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        TpmGateSettings slow = TestGate() with { GateTimeout = TimeSpan.FromSeconds(30) };
+        When.A<WindowsTpmDeviceKeyStore>("lists while the gate is held, cancelling after 300 ms of a 30 s wait",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                DeviceKeyInfo key = Created(store, new DeviceKeyCreateRequest { Scope = "test." + DeviceKeyId.NewAlias(), Alias = "k1" });
+                try
+                {
+                    using HeldMutex holder = new HeldMutex(slow.GateName);
+                    WindowsTpmDeviceKeyStore gated = new WindowsTpmDeviceKeyStore(records, TimeProvider.System, slow);
+                    using CancellationTokenSource cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+                    System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+                    DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = gated.ListAsync(key.Id.Scope, cancel.Token).GetAwaiter().GetResult();
+                    return new GateOutcome(listed.Succeeded, listed.Error?.Category, true, watch.Elapsed);
+                }
+                finally
+                {
+                    store.DeleteAsync(key.Id).GetAwaiter().GetResult();
+                }
+            })
+        .TheTest
+        .ShouldPass<GateOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"the list is Cancelled (succeeded: {outcome.ListSucceeded}, category {outcome.ListCategory})", !outcome.ListSucceeded && outcome.ListCategory == DeviceKeyErrorCategory.Cancelled);
+            because.ItsTrue($"it stops soon after the token is cancelled ({outcome.Took.TotalMilliseconds:0} ms)", outcome.Took < TimeSpan.FromSeconds(5));
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    /// <summary>
+    /// Gate settings private to one test: its own gate name, short timeouts, and no remembered probe.
+    /// </summary>
+    private static TpmGateSettings TestGate()
+    {
+        return new TpmGateSettings($@"Local\bam.devicekey.test-gate-{Guid.NewGuid():N}", TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), false);
+    }
+
+    /// <summary>
+    /// Creates a key for a test's setup, or fails the test with the reason instead of a null reference later.
+    /// </summary>
+    private static DeviceKeyInfo Created(IDeviceKeyStore store, DeviceKeyCreateRequest request)
+    {
+        DeviceKeyResult<DeviceKeyInfo> created = store.CreateAsync(request).GetAwaiter().GetResult();
+        if (!created.Succeeded || created.Value == null)
+        {
+            throw new InvalidOperationException($"setup could not create key '{request.Alias}' in scope '{request.Scope}': {created.Error?.Category} {created.Error?.Message}");
+        }
+        return created.Value;
     }
 
     private static byte[] Nested(int length)
@@ -953,6 +1132,73 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     private sealed record DisposedOutcome(bool GotSameKey, DeviceKeyErrorCategory? Missing, DeviceKeyErrorCategory? UndefinedAccess, DeviceKeyErrorCategory? UndefinedProtection, DeviceKeyErrorCategory? BadListScope, DeviceKeyErrorCategory? CreateAfter, DeviceKeyErrorCategory? SignAfter, DeviceKeyErrorCategory? GetAfter, DeviceKeyErrorCategory? ListAfter, bool SupportedAfter);
 
     private sealed record BadRecordOutcome(DeviceKeyErrorCategory? Duplicate, List<DeviceKeyErrorCategory?> Categories, bool ListSucceeded, int Listed, bool GoneRecordKept, DeviceKeyErrorCategory? GoneCategory, bool GoneDeleted, int TemporaryFiles);
+
+    private sealed record GateOutcome(bool ListSucceeded, DeviceKeyErrorCategory? ListCategory, bool Supported, TimeSpan Took);
+
+    private sealed record ClaimOutcome(DeviceKeyErrorCategory? WhileHeld, DeviceKeyErrorCategory? AfterHeld, bool CreatedAfterRelease);
+
+    /// <summary>
+    /// A named mutex held by its own thread until disposed, the way another process would hold it. A mutex belongs
+    /// to the thread that took it, so the test thread can't hold it for the store it then calls.
+    /// </summary>
+    private sealed class HeldMutex : IDisposable
+    {
+        private readonly ManualResetEventSlim _taken = new ManualResetEventSlim(false);
+
+        private readonly ManualResetEventSlim _release = new ManualResetEventSlim(false);
+
+        private readonly Thread _thread;
+
+        public HeldMutex(string name)
+        {
+            _thread = new Thread(() =>
+            {
+                using Mutex mutex = new Mutex(false, name);
+                mutex.WaitOne();
+                _taken.Set();
+                _release.Wait();
+                mutex.ReleaseMutex();
+            })
+            { IsBackground = true };
+            _thread.Start();
+            if (!_taken.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new InvalidOperationException($"could not take mutex '{name}'");
+            }
+        }
+
+        public void Dispose()
+        {
+            _release.Set();
+            _thread.Join(TimeSpan.FromSeconds(10));
+            _taken.Dispose();
+            _release.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A PowerShell process loading the TPM with its own key, and that key's name, so the key can be deleted even
+    /// when the process has to be killed before its own cleanup runs.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private sealed record TpmNoise(System.Diagnostics.Process Process, string KeyName)
+    {
+        public void Stop()
+        {
+            if (!Process.WaitForExit(30000))
+            {
+                Process.Kill(true);
+                Process.WaitForExit(10000);
+            }
+            Process.Dispose();
+            System.Security.Cryptography.CngProvider provider = new System.Security.Cryptography.CngProvider(WindowsTpmDeviceKeyStore.ProviderName);
+            if (System.Security.Cryptography.CngKey.Exists(KeyName, provider))
+            {
+                using System.Security.Cryptography.CngKey key = System.Security.Cryptography.CngKey.Open(KeyName, provider);
+                key.Delete();
+            }
+        }
+    }
 
     private sealed record LoadedListOutcome(int Complete, int Failed, int Short, int NotSupported, int Thrown);
 

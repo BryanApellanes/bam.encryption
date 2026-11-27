@@ -23,16 +23,20 @@ namespace Bam.Encryption.DeviceKeys;
 /// and <see cref="GetAsync"/> reports it as <see cref="DeviceKeyErrorCategory.PlatformFailure"/>; a record whose TPM
 /// key is gone is not listed either, and <see cref="DeleteAsync"/> removes it.</para>
 /// <para>File and TPM failures are reported as <see cref="DeviceKeyErrorCategory.PlatformFailure"/>, never thrown.
-/// <see cref="DeviceKeyErrorCategory.NotSupported"/> means only that the provider has never worked in this process.</para>
+/// <see cref="DeviceKeyErrorCategory.NotSupported"/> means only that the provider itself has not worked in this
+/// process; a gate that can't be taken says nothing about the TPM and is never reported as
+/// <see cref="DeviceKeyErrorCategory.NotSupported"/>.</para>
 /// <para>Creating takes a claim on the id (a named mutex on the key name), so two store instances or processes in
 /// this logon session creating one id end with one key: one caller gets it, the others get
 /// <see cref="DeviceKeyErrorCategory.AlreadyExists"/>. The claim is per logon session (<c>Local\</c>), so a service
 /// and a desktop process of the same user don't share it. A record left behind by a key that is gone (a cleared
 /// TPM, a crash) doesn't block creating that id again.</para>
 /// <para>Calls into the TPM go through one gate, a named mutex every bam process of this logon session takes,
-/// because the provider reports itself not ready under concurrent use. A provider failure is retried a few times;
-/// a list either has every key or is a <see cref="DeviceKeyErrorCategory.PlatformFailure"/>, never a short success.
-/// Calls run synchronously on the caller's thread; a UI app should call from a background thread.</para>
+/// because the provider reports itself not ready under concurrent use. Every TPM call, create included, retries a
+/// provider failure a few times; a gate that can't be opened or taken is not retried. A list either has every key
+/// or is a <see cref="DeviceKeyErrorCategory.PlatformFailure"/>, never a short success. Waits for the gate and the
+/// claim end when the caller's token is cancelled. Calls run synchronously on the caller's thread; a UI app should
+/// call from a background thread.</para>
 /// </remarks>
 public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
 {
@@ -41,27 +45,23 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
 
     private const string KeyNamePrefix = "bam.devicekey.";
 
-    private static readonly IReadOnlyList<DeviceKeyAccess> Supported = Array.AsReadOnly(new[] { DeviceKeyAccess.None });
-
-    private readonly DirectoryInfo _records;
-
-    private readonly TimeProvider _clock;
-
-    private const string GateName = @"Local\bam.devicekey.tpm-gate";
-
     private const int ProbeAttempts = 10;
 
     private const int TpmAttempts = 3;
+
+    private static readonly IReadOnlyList<DeviceKeyAccess> Supported = Array.AsReadOnly(new[] { DeviceKeyAccess.None });
 
     private static readonly TimeSpan ProbeDelay = TimeSpan.FromMilliseconds(200);
 
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(100);
 
-    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
-
-    private static readonly TimeSpan ClaimTimeout = TimeSpan.FromSeconds(5);
-
     private static volatile bool _providerWorked;
+
+    private readonly DirectoryInfo _records;
+
+    private readonly TimeProvider _clock;
+
+    private readonly TpmGateSettings _settings;
 
     /// <summary>
     /// Creates a store that keeps its key records under <c>~/.bam/devicekeys/tpm</c>.
@@ -75,10 +75,19 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// </summary>
     /// <param name="records">Where the public key records go.</param>
     /// <param name="clock">The clock that stamps <see cref="DeviceKeyInfo.CreatedUtc"/>.</param>
-    public WindowsTpmDeviceKeyStore(DirectoryInfo records, TimeProvider clock)
+    public WindowsTpmDeviceKeyStore(DirectoryInfo records, TimeProvider clock) : this(records, clock, TpmGateSettings.Default)
+    {
+    }
+
+    /// <summary>
+    /// Creates a store with its own gate name and timeouts, so tests can hold or squat the gate without touching
+    /// other processes' TPM calls.
+    /// </summary>
+    internal WindowsTpmDeviceKeyStore(DirectoryInfo records, TimeProvider clock, TpmGateSettings settings)
     {
         _records = records ?? throw new ArgumentNullException(nameof(records));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
     /// <inheritdoc />
@@ -86,7 +95,7 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// check <see cref="DeviceKeyCapabilities.IsSupported"/> first.</remarks>
     public Task<DeviceKeyCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
     {
-        string? reason = UnsupportedReason();
+        string? reason = UnsupportedReason(cancellationToken);
         return Task.FromResult(new DeviceKeyCapabilities
         {
             IsSupported = reason == null,
@@ -100,47 +109,47 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// <inheritdoc />
     public Task<DeviceKeyResult<DeviceKeyInfo>> CreateAsync(DeviceKeyCreateRequest request, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, DeviceKeyProtection.Hardware, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>();
+        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckCreate<DeviceKeyInfo>(request, Supported, DeviceKeyProtection.Hardware, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>(cancellationToken);
         if (refused != null)
         {
             return Task.FromResult(refused);
         }
         DeviceKeyId id = new DeviceKeyId(request.Scope, request.Alias ?? DeviceKeyId.NewAlias());
         return Task.FromResult(OperatingSystem.IsWindows()
-            ? Create(id, request.Access)
+            ? Create(id, request.Access, cancellationToken)
             : DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.NotSupported, "The TPM store needs Windows."));
     }
 
     /// <inheritdoc />
     public Task<DeviceKeyResult<DeviceKeySignature>> SignAsync(DeviceKeyId id, byte[] data, string? promptReason = null, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<DeviceKeySignature>? refused = DeviceKeyRequests.CheckSign<DeviceKeySignature>(id, data, cancellationToken, false) ?? Unsupported<DeviceKeySignature>();
+        DeviceKeyResult<DeviceKeySignature>? refused = DeviceKeyRequests.CheckSign<DeviceKeySignature>(id, data, cancellationToken, false) ?? Unsupported<DeviceKeySignature>(cancellationToken);
         if (refused != null)
         {
             return Task.FromResult(refused);
         }
         return Task.FromResult(OperatingSystem.IsWindows()
-            ? Sign(id, data)
+            ? Sign(id, data, cancellationToken)
             : DeviceKeyResult<DeviceKeySignature>.Failure(DeviceKeyErrorCategory.NotSupported, "The TPM store needs Windows."));
     }
 
     /// <inheritdoc />
     public Task<DeviceKeyResult<DeviceKeyInfo>> GetAsync(DeviceKeyId id, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckId<DeviceKeyInfo>(id, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>();
+        DeviceKeyResult<DeviceKeyInfo>? refused = DeviceKeyRequests.CheckId<DeviceKeyInfo>(id, cancellationToken, false) ?? Unsupported<DeviceKeyInfo>(cancellationToken);
         if (refused != null)
         {
             return Task.FromResult(refused);
         }
         return Task.FromResult(OperatingSystem.IsWindows()
-            ? Describe(id).Result
+            ? Describe(id, cancellationToken).Result
             : DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.NotSupported, "The TPM store needs Windows."));
     }
 
     /// <inheritdoc />
     public Task<DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>> ListAsync(string scope, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>? refused = DeviceKeyRequests.CheckScope<IReadOnlyList<DeviceKeyInfo>>(scope, cancellationToken, false) ?? Unsupported<IReadOnlyList<DeviceKeyInfo>>();
+        DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>? refused = DeviceKeyRequests.CheckScope<IReadOnlyList<DeviceKeyInfo>>(scope, cancellationToken, false) ?? Unsupported<IReadOnlyList<DeviceKeyInfo>>(cancellationToken);
         if (refused != null)
         {
             return Task.FromResult(refused);
@@ -167,16 +176,21 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
             {
                 continue;
             }
-            TpmAttempt<DeviceKeyInfo> described = Describe(new DeviceKeyId(scope, alias));
-            if (described.Transient)
-            {
-                // The provider failed, not the key: a list without this key would be a wrong answer.
-                return Task.FromResult(DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM was busy while listing scope '{scope}': {described.Result.Error?.Message}"));
-            }
+            TpmAttempt<DeviceKeyInfo> described = Describe(new DeviceKeyId(scope, alias), cancellationToken);
             if (described.Result.Succeeded && described.Result.Value != null)
             {
                 keys.Add(described.Result.Value);
+                continue;
             }
+            if (described.Skippable || described.Result.Error?.Category == DeviceKeyErrorCategory.KeyNotFound)
+            {
+                // The key is gone or its record is bad: it isn't one of this scope's keys.
+                continue;
+            }
+            // Anything else (a busy TPM, a gate that can't be taken, a record that can't be read, a cancelled wait)
+            // says nothing about whether the key exists, so a list without it would be a wrong answer.
+            DeviceKeyErrorCategory category = described.Result.Error?.Category == DeviceKeyErrorCategory.Cancelled ? DeviceKeyErrorCategory.Cancelled : DeviceKeyErrorCategory.PlatformFailure;
+            return Task.FromResult(DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>.Failure(category, $"Scope '{scope}' could not be listed completely: {described.Result.Error?.Message}"));
         }
         List<DeviceKeyInfo> ordered = keys.OrderBy(info => info.CreatedUtc).ThenBy(info => info.Id.Alias, StringComparer.Ordinal).ToList();
         return Task.FromResult(DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>.Success(ordered));
@@ -185,13 +199,13 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// <inheritdoc />
     public Task<DeviceKeyResult<bool>> DeleteAsync(DeviceKeyId id, CancellationToken cancellationToken = default)
     {
-        DeviceKeyResult<bool>? refused = DeviceKeyRequests.CheckId<bool>(id, cancellationToken, false) ?? Unsupported<bool>();
+        DeviceKeyResult<bool>? refused = DeviceKeyRequests.CheckId<bool>(id, cancellationToken, false) ?? Unsupported<bool>(cancellationToken);
         if (refused != null)
         {
             return Task.FromResult(refused);
         }
         return Task.FromResult(OperatingSystem.IsWindows()
-            ? Delete(id)
+            ? Delete(id, cancellationToken)
             : DeviceKeyResult<bool>.Failure(DeviceKeyErrorCategory.NotSupported, "The TPM store needs Windows."));
     }
 
@@ -205,31 +219,44 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         return $"{KeyNamePrefix}{id.Scope}+{id.Alias}";
     }
 
-    private DeviceKeyResult<T>? Unsupported<T>()
+    /// <summary>
+    /// The name of the claim a create takes on a key id.
+    /// </summary>
+    /// <param name="id">The key.</param>
+    /// <returns>The mutex name.</returns>
+    internal static string ClaimNameOf(DeviceKeyId id)
     {
-        string? reason = UnsupportedReason();
+        return $@"Local\{KeyNameOf(id)}";
+    }
+
+    private DeviceKeyResult<T>? Unsupported<T>(CancellationToken cancellationToken)
+    {
+        string? reason = UnsupportedReason(cancellationToken);
         return reason == null ? null : DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.NotSupported, reason);
     }
 
-    private static string? UnsupportedReason()
+    private string? UnsupportedReason(CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows())
         {
             return "The TPM store needs Windows.";
         }
-        return ProbeProvider();
+        return ProbeProvider(cancellationToken);
     }
 
     /// <summary>
     /// Whether the provider is there. A success is remembered for the life of the process: after that a provider
     /// failure means the TPM is busy or broken, which is <see cref="DeviceKeyErrorCategory.PlatformFailure"/>, not
     /// <see cref="DeviceKeyErrorCategory.NotSupported"/>. Before the first success the probe tries for about two
-    /// seconds, under the gate, so a TPM that another program is using isn't reported as missing.
+    /// seconds, under the gate, so a TPM that other bam processes are using isn't reported as missing; heavy load
+    /// from programs outside the gate can still exhaust it (bam.encryption#26). A gate that can't be opened or taken,
+    /// or a cancelled wait, says nothing about the TPM: the probe stops and answers "supported" without remembering
+    /// it, and the call itself then reports the failure.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static string? ProbeProvider()
+    private string? ProbeProvider(CancellationToken cancellationToken)
     {
-        if (_providerWorked)
+        if (_settings.RememberProbe && _providerWorked)
         {
             return null;
         }
@@ -247,10 +274,17 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
                 {
                     return new TpmAttempt<bool>(DeviceKeyResult<bool>.Failure(DeviceKeyErrorCategory.PlatformFailure, ex.Message), true);
                 }
-            });
+            }, cancellationToken);
+            if (probed.GateFailed)
+            {
+                return null;
+            }
             if (probed.Result.Succeeded)
             {
-                _providerWorked = true;
+                if (_settings.RememberProbe)
+                {
+                    _providerWorked = true;
+                }
                 return null;
             }
             reason = probed.Result.Error?.Message ?? string.Empty;
@@ -258,16 +292,16 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
             {
                 break;
             }
-            if (attempt + 1 < ProbeAttempts)
+            if (attempt + 1 < ProbeAttempts && cancellationToken.WaitHandle.WaitOne(ProbeDelay))
             {
-                Thread.Sleep(ProbeDelay);
+                return null;
             }
         }
         return $"No usable TPM: {reason}";
     }
 
     [SupportedOSPlatform("windows")]
-    private DeviceKeyResult<DeviceKeyInfo> Create(DeviceKeyId id, DeviceKeyAccess access)
+    private DeviceKeyResult<DeviceKeyInfo> Create(DeviceKeyId id, DeviceKeyAccess access, CancellationToken cancellationToken)
     {
         // The claim is a named mutex on the key name, so it holds across store instances, record directories and the
         // processes of this logon session. Whoever holds it is the only caller that may create, or roll back, this
@@ -283,22 +317,19 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         }
         using (claim)
         {
-            bool claimed;
-            try
+            Taken taken = Take(claim, _settings.ClaimTimeout, cancellationToken);
+            if (taken == Taken.Cancelled)
             {
-                claimed = claim.WaitOne(ClaimTimeout);
+                return DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.Cancelled, "The operation was cancelled.");
             }
-            catch (AbandonedMutexException)
+            if (taken == Taken.TimedOut)
             {
-                claimed = true;
-            }
-            if (!claimed)
-            {
-                return DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"Another caller has been creating key '{id.Alias}' in scope '{id.Scope}' for {ClaimTimeout.TotalSeconds:0} seconds; try again.");
+                return DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"Another caller has been creating key '{id.Alias}' in scope '{id.Scope}' for {_settings.ClaimTimeout.TotalSeconds:0.#} seconds; try again.");
             }
             try
             {
-                return UnderGate(() => new TpmAttempt<DeviceKeyInfo>(CreateClaimed(id, access), false)).Result;
+                // The claim is held for every try, so a retry can't race another creator.
+                return WithTpm(() => CreateClaimed(id, access), cancellationToken).Result;
             }
             finally
             {
@@ -308,7 +339,7 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     }
 
     [SupportedOSPlatform("windows")]
-    private DeviceKeyResult<DeviceKeyInfo> CreateClaimed(DeviceKeyId id, DeviceKeyAccess access)
+    private TpmAttempt<DeviceKeyInfo> CreateClaimed(DeviceKeyId id, DeviceKeyAccess access)
     {
         CngProvider provider = new CngProvider(ProviderName);
         FileInfo file = RecordFileOf(id);
@@ -316,12 +347,12 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         {
             if (CngKey.Exists(KeyNameOf(id), provider))
             {
-                return AlreadyExists(id);
+                return new TpmAttempt<DeviceKeyInfo>(AlreadyExists(id), false);
             }
         }
         catch (CryptographicException ex)
         {
-            return DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM could not be asked about the key: {ex.Message}");
+            return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM could not be asked about the key: {ex.Message}"), true);
         }
         // No TPM key under this name, so any record here is a leftover (a cleared TPM, a crash): the new record
         // replaces it.
@@ -339,10 +370,11 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         }
         catch (CryptographicException ex)
         {
-            // This call created nothing, so nothing is rolled back.
+            // This call created nothing, so nothing is rolled back. With no key under the name, the TPM was most
+            // likely busy and the next try may work.
             return ExistsQuietly(id, provider)
-                ? AlreadyExists(id)
-                : DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM did not create the key: {ex.Message}");
+                ? new TpmAttempt<DeviceKeyInfo>(AlreadyExists(id), false)
+                : new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM did not create the key: {ex.Message}"), true);
         }
         using (key)
         {
@@ -355,19 +387,19 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
                 }
                 DeviceKeyRecord record = new DeviceKeyRecord { CreatedUtc = _clock.GetUtcNow(), Access = access };
                 WriteRecord(file, record);
-                return DeviceKeyResult<DeviceKeyInfo>.Success(CanonicalSpki.Describe(id, spki, record.CreatedUtc, DeviceKeyProtection.Hardware, access));
+                return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Success(CanonicalSpki.Describe(id, spki, record.CreatedUtc, DeviceKeyProtection.Hardware, access)), false);
             }
             catch (Exception ex)
             {
                 // This call created the key and holds the claim, so removing it removes nobody else's key.
                 string rollback = DeleteQuietly(key);
-                return DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The key's record could not be written, so the key was not kept: {ex.Message}{rollback}");
+                return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The key's record could not be written, so the key was not kept: {ex.Message}{rollback}"), false);
             }
         }
     }
 
     [SupportedOSPlatform("windows")]
-    private static DeviceKeyResult<DeviceKeySignature> Sign(DeviceKeyId id, byte[] data)
+    private DeviceKeyResult<DeviceKeySignature> Sign(DeviceKeyId id, byte[] data, CancellationToken cancellationToken)
     {
         return WithTpm(() =>
         {
@@ -393,15 +425,15 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
                 // Usually a TPM busy with another program; try again shortly.
                 return new TpmAttempt<DeviceKeySignature>(DeviceKeyResult<DeviceKeySignature>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM did not sign: {ex.Message}"), true);
             }
-        }).Result;
+        }, cancellationToken).Result;
     }
 
     /// <summary>
-    /// Describes one key. <see cref="TpmAttempt{T}.Transient"/> is true when the provider itself failed after the
-    /// retries, as opposed to the key being gone or its record being bad.
+    /// Describes one key. <see cref="TpmAttempt{T}.Skippable"/> is true only when the key is gone or its record is
+    /// missing or bad, the cases a list leaves out.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private TpmAttempt<DeviceKeyInfo> Describe(DeviceKeyId id)
+    private TpmAttempt<DeviceKeyInfo> Describe(DeviceKeyId id, CancellationToken cancellationToken)
     {
         FileInfo file = RecordFileOf(id);
         return WithTpm(() =>
@@ -412,16 +444,16 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
                 if (!CngKey.Exists(KeyNameOf(id), provider))
                 {
                     // A read never deletes: a stale record stays until DeleteAsync removes it or CreateAsync replaces it.
-                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyRequests.NotFound<DeviceKeyInfo>(id), false);
+                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyRequests.NotFound<DeviceKeyInfo>(id), false, Skippable: true);
                 }
                 DeviceKeyRecord? record = ReadRecord(file);
                 if (record == null)
                 {
-                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The record for key '{id.Alias}' in scope '{id.Scope}' is missing or unreadable."), false);
+                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The record for key '{id.Alias}' in scope '{id.Scope}' is missing or unreadable."), false, Skippable: true);
                 }
                 if (!Enum.IsDefined(record.Access) || !Supported.Contains(record.Access))
                 {
-                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The record for key '{id.Alias}' in scope '{id.Scope}' names access '{record.Access}', which this store does not create."), false);
+                    return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The record for key '{id.Alias}' in scope '{id.Scope}' names access '{record.Access}', which this store does not create."), false, Skippable: true);
                 }
                 using CngKey key = CngKey.Open(KeyNameOf(id), provider);
                 using ECDsaCng ecdsa = new ECDsaCng(key);
@@ -435,11 +467,11 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
             {
                 return new TpmAttempt<DeviceKeyInfo>(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The key could not be read: {ex.Message}"), false);
             }
-        });
+        }, cancellationToken);
     }
 
     [SupportedOSPlatform("windows")]
-    private DeviceKeyResult<bool> Delete(DeviceKeyId id)
+    private DeviceKeyResult<bool> Delete(DeviceKeyId id, CancellationToken cancellationToken)
     {
         FileInfo file = RecordFileOf(id);
         return WithTpm(() =>
@@ -471,20 +503,24 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
             {
                 return new TpmAttempt<bool>(DeviceKeyResult<bool>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM did not delete the key: {ex.Message}"), true);
             }
-        }).Result;
+        }, cancellationToken).Result;
     }
 
     /// <summary>
-    /// Runs one TPM operation under the gate, retrying a transient provider failure a few times.
+    /// Runs one TPM operation under the gate, retrying a provider failure a few times. A gate that can't be opened
+    /// or taken, or a cancelled wait, is not retried: it has already waited, and a retry won't change it.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static TpmAttempt<T> WithTpm<T>(Func<TpmAttempt<T>> operation)
+    private TpmAttempt<T> WithTpm<T>(Func<TpmAttempt<T>> operation, CancellationToken cancellationToken)
     {
-        TpmAttempt<T> last = UnderGate(operation);
-        for (int attempt = 1; attempt < TpmAttempts && last.Transient; attempt++)
+        TpmAttempt<T> last = UnderGate(operation, cancellationToken);
+        for (int attempt = 1; attempt < TpmAttempts && last.Transient && !last.GateFailed; attempt++)
         {
-            Thread.Sleep(RetryDelay);
-            last = UnderGate(operation);
+            if (cancellationToken.WaitHandle.WaitOne(RetryDelay))
+            {
+                return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.Cancelled, "The operation was cancelled."), false, GateFailed: true);
+            }
+            last = UnderGate(operation, cancellationToken);
         }
         return last;
     }
@@ -492,34 +528,31 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
     /// <summary>
     /// Runs one TPM operation while holding the gate: a named mutex every bam process of this logon session takes
     /// before calling the provider, because the provider reports itself not ready under concurrent use. A gate that
-    /// stays taken past <see cref="GateTimeout"/> is a transient failure.
+    /// can't be opened, stays taken past the gate timeout, or whose wait is cancelled comes back with
+    /// <see cref="TpmAttempt{T}.GateFailed"/> set and the operation not run.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static TpmAttempt<T> UnderGate<T>(Func<TpmAttempt<T>> operation)
+    private TpmAttempt<T> UnderGate<T>(Func<TpmAttempt<T>> operation, CancellationToken cancellationToken)
     {
         Mutex gate;
         try
         {
-            gate = new Mutex(false, GateName);
+            gate = new Mutex(false, _settings.GateName);
         }
         catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException || ex is UnauthorizedAccessException || ex is IOException)
         {
-            return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM gate could not be opened: {ex.Message}"), false);
+            return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM gate could not be opened: {ex.Message}"), true, GateFailed: true);
         }
         using (gate)
         {
-            bool held;
-            try
+            Taken taken = Take(gate, _settings.GateTimeout, cancellationToken);
+            if (taken == Taken.Cancelled)
             {
-                held = gate.WaitOne(GateTimeout);
+                return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.Cancelled, "The operation was cancelled."), false, GateFailed: true);
             }
-            catch (AbandonedMutexException)
+            if (taken == Taken.TimedOut)
             {
-                held = true;
-            }
-            if (!held)
-            {
-                return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM stayed busy for {GateTimeout.TotalSeconds:0} seconds."), true);
+                return new TpmAttempt<T>(DeviceKeyResult<T>.Failure(DeviceKeyErrorCategory.PlatformFailure, $"The TPM gate stayed taken for {_settings.GateTimeout.TotalSeconds:0.#} seconds."), true, GateFailed: true);
             }
             try
             {
@@ -532,14 +565,33 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         }
     }
 
+    /// <summary>
+    /// Waits for a mutex, the timeout, or the token. An abandoned mutex counts as taken: its holder ended without
+    /// releasing it, and what it guarded is checked again by the caller.
+    /// </summary>
+    private static Taken Take(Mutex mutex, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        int index;
+        try
+        {
+            index = cancellationToken.CanBeCanceled
+                ? WaitHandle.WaitAny(new WaitHandle[] { mutex, cancellationToken.WaitHandle }, timeout)
+                : (mutex.WaitOne(timeout) ? 0 : WaitHandle.WaitTimeout);
+        }
+        catch (AbandonedMutexException)
+        {
+            return Taken.Held;
+        }
+        if (index == 0)
+        {
+            return Taken.Held;
+        }
+        return index == WaitHandle.WaitTimeout ? Taken.TimedOut : Taken.Cancelled;
+    }
+
     private FileInfo RecordFileOf(DeviceKeyId id)
     {
         return new FileInfo(Path.Combine(_records.FullName, id.Scope, id.Alias + ".json"));
-    }
-
-    private static string ClaimNameOf(DeviceKeyId id)
-    {
-        return $@"Local\{KeyNameOf(id)}";
     }
 
     private static DeviceKeyResult<DeviceKeyInfo> AlreadyExists(DeviceKeyId id)
@@ -615,10 +667,19 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         return record;
     }
 
+    private enum Taken
+    {
+        Held,
+        TimedOut,
+        Cancelled,
+    }
+
     /// <summary>
-    /// One TPM operation's result, and whether it failed in a way a retry may fix (the provider was busy).
+    /// One TPM operation's result. <c>Transient</c>: a retry may fix it (the provider was busy). <c>Skippable</c>:
+    /// the key is gone or its record is bad, so a list leaves it out. <c>GateFailed</c>: the gate couldn't be taken
+    /// or the wait was cancelled, so the operation didn't run and nothing is known about the TPM.
     /// </summary>
-    private sealed record TpmAttempt<T>(DeviceKeyResult<T> Result, bool Transient);
+    private sealed record TpmAttempt<T>(DeviceKeyResult<T> Result, bool Transient, bool Skippable = false, bool GateFailed = false);
 
     /// <summary>
     /// The public record kept beside each TPM key.
@@ -631,4 +692,17 @@ public sealed class WindowsTpmDeviceKeyStore : IDeviceKeyStore
         /// <summary>The key's access policy.</summary>
         public DeviceKeyAccess Access { get; set; }
     }
+}
+
+/// <summary>
+/// The gate and claim settings of a <see cref="WindowsTpmDeviceKeyStore"/>. Only tests change them.
+/// </summary>
+/// <param name="GateName">The named mutex every TPM call takes.</param>
+/// <param name="GateTimeout">How long a call waits for the gate.</param>
+/// <param name="ClaimTimeout">How long a create waits for another creator of the same id.</param>
+/// <param name="RememberProbe">Whether a working provider is remembered for the process; false makes every call probe.</param>
+internal sealed record TpmGateSettings(string GateName, TimeSpan GateTimeout, TimeSpan ClaimTimeout, bool RememberProbe)
+{
+    /// <summary>The settings every real store uses.</summary>
+    public static TpmGateSettings Default { get; } = new TpmGateSettings(@"Local\bam.devicekey.tpm-gate", TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(5), true);
 }
