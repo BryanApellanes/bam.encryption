@@ -6,7 +6,8 @@ namespace Bam.Encryption.Tests.Unit;
 
 /// <summary>
 /// Pins the directory-backed named key storage (bam.encryption#31): keys survive a new instance,
-/// writes replace the file through a temporary one, names stay inside the root, and on Unix the
+/// writes replace the file through a temporary one, concurrent saves leave every read whole, a
+/// name gives the same file on every platform and stays inside the root, and on Unix the
 /// directory and files are readable by their owner only.
 /// </summary>
 [UnitTestMenu("File Named Key Storage Should", Selector = "fnks")]
@@ -179,31 +180,134 @@ public class FileNamedKeyStorageShould : UnitTestMenuContainer
     }
 
     [UnitTest]
-    public void KeepKeysOwnerOnlyOnUnix()
+    public void GiveANameTheSameFileOnEveryPlatform()
     {
-        When.A<FileNamedKeyStorageShould>("creates the directory and a key file, over a directory that was open to others", (test) =>
+        When.A<FileNamedKeyStorageShould>("saves names holding every replaced character and a control character", (test) =>
             {
-                if (OperatingSystem.IsWindows())
-                {
-                    return new ModeOutcome(false, default, default, default);
-                }
-
                 string root = NewRoot();
                 try
                 {
-                    Directory.CreateDirectory(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
-                    string staleTemporary = Path.Combine(root, "loose.pem.tmp");
-                    File.WriteAllBytes(staleTemporary, new byte[] { 0 });
-                    File.SetUnixFileMode(staleTemporary, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+                    FileNamedKeyStorage storage = new FileNamedKeyStorage(root);
+                    storage.SaveNamedKey("actor:server", new byte[] { 1 });
+                    storage.SaveNamedKey("a*b?c\"d<e>f|g", new byte[] { 2 });
+                    storage.SaveNamedKey("tab\there", new byte[] { 3 });
+                    string[] files = Directory.GetFiles(root).Select(path => Path.GetFileName(path)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+                    byte[]? read = storage.GetNamedKey("actor:server");
+                    return new NamingOutcome(string.Join(",", files), read != null && read.Length == 1 && read[0] == 1, FileNamedKeyStorage.ReplacedCharacters);
+                }
+                finally
+                {
+                    Remove(root);
+                }
+            })
+            .TheTest
+            .ShouldPass<NamingOutcome>((because, outcome) =>
+            {
+                because.ItsTrue("each replaced character became an underscore: " + outcome.Files, outcome.Files == "a_b_c_d_e_f_g.pem,actor_server.pem,tab_here.pem");
+                because.ItsTrue("the key reads back under its name", outcome.ReadBack);
+                because.ItsTrue("the replaced set is the separators and the characters Windows refuses", outcome.Replaced == "/\\:*?\"<>|");
+            })
+            .SoBeHappy()
+            .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void KeepEveryReadWholeWhileOneNameIsSavedFromManyThreads()
+    {
+        When.A<FileNamedKeyStorageShould>("saves one name from four threads while another thread reads it", (test) =>
+            {
+                string root = NewRoot();
+                try
+                {
+                    const int KeyLength = 4096;
+                    const int SavesPerWriter = 150;
+                    FileNamedKeyStorage storage = new FileNamedKeyStorage(root);
+                    storage.SaveNamedKey("shared", Enumerable.Repeat((byte)9, KeyLength).ToArray());
+                    int failedSaves = 0;
+                    int tornReads = 0;
+                    int reads = 0;
+                    string firstFailure = string.Empty;
+                    using CancellationTokenSource writing = new CancellationTokenSource();
+                    Task reader = Task.Run(() =>
+                    {
+                        while (!writing.IsCancellationRequested)
+                        {
+                            try
+                            {
+                                byte[]? key = new FileNamedKeyStorage(root).GetNamedKey("shared");
+                                reads++;
+                                if (key == null || key.Length != KeyLength || key.Any(value => value != key[0]))
+                                {
+                                    Interlocked.Increment(ref tornReads);
+                                }
+                            }
+                            catch (Exception exception)
+                            {
+                                Interlocked.Increment(ref tornReads);
+                                firstFailure = "read: " + exception.GetType().Name;
+                            }
+                        }
+                    });
+                    Task[] writers = Enumerable.Range(1, 4).Select(writer => Task.Run(() =>
+                    {
+                        byte[] key = Enumerable.Repeat((byte)writer, KeyLength).ToArray();
+                        for (int save = 0; save < SavesPerWriter; save++)
+                        {
+                            try
+                            {
+                                storage.SaveNamedKey("shared", key);
+                            }
+                            catch (Exception exception)
+                            {
+                                Interlocked.Increment(ref failedSaves);
+                                firstFailure = "save: " + exception.GetType().Name;
+                            }
+                        }
+                    })).ToArray();
+                    Task.WaitAll(writers);
+                    writing.Cancel();
+                    reader.Wait();
+                    string[] files = Directory.GetFiles(root).Select(path => Path.GetFileName(path)).ToArray();
+                    return new ConcurrencyOutcome(failedSaves, tornReads, reads, string.Join(",", files), firstFailure);
+                }
+                finally
+                {
+                    Remove(root);
+                }
+            })
+            .TheTest
+            .ShouldPass<ConcurrencyOutcome>((because, outcome) =>
+            {
+                because.ItsTrue("no save failed: " + outcome.FailedSaves + " " + outcome.FirstFailure, outcome.FailedSaves == 0);
+                because.ItsTrue("the reader read at least once", outcome.Reads > 0);
+                because.ItsTrue("every read was one whole key: " + outcome.TornReads + " " + outcome.FirstFailure, outcome.TornReads == 0);
+                because.ItsTrue("no temporary file is left: " + outcome.Files, outcome.Files == "shared.pem");
+            })
+            .SoBeHappy()
+            .UnlessItFailed();
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void KeepKeysOwnerOnlyOnUnix()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "file modes are a Unix concept");
+
+        When.A<FileNamedKeyStorageShould>("creates a key file, and replaces a loose one, in a directory that was open to others", (test) =>
+            {
+                string root = NewRoot();
+                try
+                {
+                    UnixFileMode loose = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+                    Directory.CreateDirectory(root, loose | UnixFileMode.UserExecute);
+                    string looseKey = Path.Combine(root, "loose.pem");
+                    File.WriteAllBytes(looseKey, new byte[] { 0 });
+                    File.SetUnixFileMode(looseKey, loose);
 
                     FileNamedKeyStorage storage = new FileNamedKeyStorage(root);
                     storage.SaveNamedKey("fresh", new byte[] { 1 });
                     storage.SaveNamedKey("loose", new byte[] { 2 });
-                    return new ModeOutcome(
-                        true,
-                        File.GetUnixFileMode(root),
-                        File.GetUnixFileMode(Path.Combine(root, "fresh.pem")),
-                        File.GetUnixFileMode(Path.Combine(root, "loose.pem")));
+                    return new ModeOutcome(File.GetUnixFileMode(root), File.GetUnixFileMode(Path.Combine(root, "fresh.pem")), File.GetUnixFileMode(looseKey));
                 }
                 finally
                 {
@@ -213,15 +317,48 @@ public class FileNamedKeyStorageShould : UnitTestMenuContainer
             .TheTest
             .ShouldPass<ModeOutcome>((because, outcome) =>
             {
-                if (!outcome.Checked)
-                {
-                    because.ItsTrue("file modes are a Unix concept, so nothing is checked on Windows", OperatingSystem.IsWindows());
-                    return;
-                }
-
                 because.ItsTrue("an existing directory is tightened to 0700", outcome.Directory == FileNamedKeyStorage.DirectoryMode);
                 because.ItsTrue("a new key file is 0600", outcome.FreshFile == FileNamedKeyStorage.KeyFileMode);
-                because.ItsTrue("a key written over a loose temporary file is 0600", outcome.OverLooseTemporary == FileNamedKeyStorage.KeyFileMode);
+                because.ItsTrue("a key saved over a loose key file is 0600", outcome.OverLooseFile == FileNamedKeyStorage.KeyFileMode);
+            })
+            .SoBeHappy()
+            .UnlessItFailed();
+    }
+
+    [UnitTest]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void NotWriteThroughAPlantedTemporaryLinkOnUnix()
+    {
+        Skip.When(OperatingSystem.IsWindows(), "the planted link is a Unix symbolic link");
+
+        When.A<FileNamedKeyStorageShould>("saves a key where the old fixed temporary name is a link to a file outside the directory", (test) =>
+            {
+                string parent = NewRoot();
+                string root = Path.Combine(parent, "keys");
+                try
+                {
+                    Directory.CreateDirectory(root);
+                    string outside = Path.Combine(parent, "outside.txt");
+                    File.WriteAllText(outside, "untouched");
+                    File.CreateSymbolicLink(Path.Combine(root, "signing.pem.tmp"), outside);
+
+                    FileNamedKeyStorage storage = new FileNamedKeyStorage(root);
+                    storage.SaveNamedKey("signing", Encoding.UTF8.GetBytes("SECRETKEY"));
+                    FileInfo keyFile = new FileInfo(Path.Combine(root, "signing.pem"));
+                    byte[]? read = storage.GetNamedKey("signing");
+                    return new PlantedLinkOutcome(File.ReadAllText(outside), keyFile.LinkTarget == null, read != null && Encoding.UTF8.GetString(read) == "SECRETKEY");
+                }
+                finally
+                {
+                    Remove(parent);
+                }
+            })
+            .TheTest
+            .ShouldPass<PlantedLinkOutcome>((because, outcome) =>
+            {
+                because.ItsTrue("the file outside the directory still holds what it held: " + outcome.OutsideText, outcome.OutsideText == "untouched");
+                because.ItsTrue("the key file is a regular file, not a link", outcome.KeyFileIsRegular);
+                because.ItsTrue("the key reads back", outcome.ReadBack);
             })
             .SoBeHappy()
             .UnlessItFailed();
@@ -235,5 +372,11 @@ public class FileNamedKeyStorageShould : UnitTestMenuContainer
 
     private sealed record RejectionOutcome(string? BlankRoot, string? BlankSaveName, string? NullBytes, string? EmptyReadName, string? EmptyDirectory, int FilesWritten);
 
-    private sealed record ModeOutcome(bool Checked, UnixFileMode Directory, UnixFileMode FreshFile, UnixFileMode OverLooseTemporary);
+    private sealed record NamingOutcome(string Files, bool ReadBack, string Replaced);
+
+    private sealed record ConcurrencyOutcome(int FailedSaves, int TornReads, int Reads, string Files, string FirstFailure);
+
+    private sealed record ModeOutcome(UnixFileMode Directory, UnixFileMode FreshFile, UnixFileMode OverLooseFile);
+
+    private sealed record PlantedLinkOutcome(string OutsideText, bool KeyFileIsRegular, bool ReadBack);
 }

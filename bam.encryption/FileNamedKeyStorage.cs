@@ -9,8 +9,18 @@ namespace Bam.Encryption;
 /// secret volume.
 /// </summary>
 /// <remarks>
-/// A key is stored as <c>&lt;name&gt;.pem</c> with every character that is not valid in a file
-/// name replaced by an underscore. Two names that differ only in such characters share a file.
+/// <para>
+/// A key is stored as <c>&lt;name&gt;.pem</c> with every character in
+/// <see cref="ReplacedCharacters"/>, and every control character, replaced by an underscore. The
+/// set is the same on every platform, so a name gives the same file wherever the directory is
+/// read. Two names that differ only in replaced characters share a file, and so do two names that
+/// differ only in case on a file system that ignores case. Use names the host controls.
+/// </para>
+/// <para>
+/// An existing directory is trusted as found. Its mode is tightened on Unix, but a key file that
+/// is already there is read as the host's key. Use a directory, under a parent, that no other
+/// user could write to before the host first ran.
+/// </para>
 /// </remarks>
 public sealed class FileNamedKeyStorage : INamedKeyStorage
 {
@@ -20,8 +30,16 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
     /// <summary>Owner read and write: the mode of every key file on Unix.</summary>
     public const UnixFileMode KeyFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
+    /// <summary>
+    /// The printable characters replaced by an underscore in a key's file name, on every platform:
+    /// both path separators and the characters Windows does not allow in a file name.
+    /// </summary>
+    public const string ReplacedCharacters = "/\\:*?\"<>|";
+
     private const string KeyFileExtension = ".pem";
     private const string TemporaryExtension = ".tmp";
+    private const int MoveAttempts = 50;
+    private const int MoveRetryDelayMilliseconds = 10;
 
     /// <summary>Creates the directory at <paramref name="rootPath"/> if needed, and uses it.</summary>
     /// <param name="rootPath">The key directory.</param>
@@ -38,35 +56,51 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
 
     /// <inheritdoc />
     /// <remarks>
-    /// The bytes are written to a temporary file that is then moved over the key file, so a reader
-    /// never sees a partly written key.
+    /// The bytes are written and flushed to a new, uniquely named temporary file that is then
+    /// moved over the key file, so a reader never sees a partly written key and two saves of one
+    /// name do not write into each other. The last move wins. The temporary file is created only
+    /// if no file of that name exists, so a file or link planted under its name is never written
+    /// through.
     /// </remarks>
     public bool SaveNamedKey(string keyName, byte[] keyBytes)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(keyName);
         ArgumentNullException.ThrowIfNull(keyBytes);
         string path = PathFor(keyName);
-        string temporary = path + TemporaryExtension;
-        FileStreamOptions options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write, Share = FileShare.None };
+        string temporary = path + "." + Guid.NewGuid().ToString("N") + TemporaryExtension;
+        FileStreamOptions options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
         if (!OperatingSystem.IsWindows())
         {
             options.UnixCreateMode = KeyFileMode;
         }
 
-        using (FileStream stream = new FileStream(temporary, options))
+        bool moved = false;
+        try
         {
-            stream.Write(keyBytes);
-        }
+            using (FileStream stream = new FileStream(temporary, options))
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    // UnixCreateMode is masked by the umask, so the mode is set again, before any
+                    // key byte is written.
+                    File.SetUnixFileMode(stream.SafeFileHandle, KeyFileMode);
+                }
 
-        if (!OperatingSystem.IsWindows())
+                stream.Write(keyBytes);
+                stream.Flush(flushToDisk: true);
+            }
+
+            MoveIntoPlace(temporary, path);
+            moved = true;
+            return true;
+        }
+        finally
         {
-            // UnixCreateMode applies only when the file is created, and is masked by the umask. A
-            // temporary file left by an interrupted write keeps whatever mode it had.
-            File.SetUnixFileMode(temporary, KeyFileMode);
+            if (!moved)
+            {
+                File.Delete(temporary);
+            }
         }
-
-        File.Move(temporary, path, overwrite: true);
-        return true;
     }
 
     /// <inheritdoc />
@@ -74,12 +108,32 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         string path = PathFor(name);
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                // Sharing delete lets a save replace the file on Windows while this read has it open.
+                using FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using MemoryStream bytes = new MemoryStream();
+                stream.CopyTo(bytes);
+                return bytes.ToArray();
+            }
+            catch (FileNotFoundException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows() && attempt < MoveAttempts)
+            {
+                // Windows refuses to open a file in the instant a save is replacing it.
+                Thread.Sleep(MoveRetryDelayMilliseconds);
+            }
+        }
     }
 
     /// <summary>
-    /// Creates a directory that only its owner can read on Unix, and tightens one that already
-    /// exists. On Windows it creates the directory and leaves its ACL as inherited.
+    /// Creates a directory that only its owner can read on Unix, and tightens the mode of one that
+    /// already exists. What an existing directory holds is left as it is. On Windows it creates
+    /// the directory and leaves its ACL as inherited.
     /// </summary>
     /// <param name="path">The directory.</param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is null or blank.</exception>
@@ -96,16 +150,39 @@ public sealed class FileNamedKeyStorage : INamedKeyStorage
         File.SetUnixFileMode(path, DirectoryMode);
     }
 
+    /// <summary>
+    /// Moves the temporary file over the key file. On Windows the move is refused while another
+    /// save is replacing the same file or a reader that does not share delete has it open, so it
+    /// is tried again for a short while before the failure is let through.
+    /// </summary>
+    private static void MoveIntoPlace(string temporary, string path)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temporary, path, overwrite: true);
+                return;
+            }
+            catch (Exception exception) when ((exception is IOException || exception is UnauthorizedAccessException) && attempt < MoveAttempts && File.Exists(temporary))
+            {
+                Thread.Sleep(MoveRetryDelayMilliseconds);
+            }
+        }
+    }
+
     private string PathFor(string keyName)
     {
-        // The separators are replaced on every platform. Path.GetInvalidFileNameChars leaves the
-        // backslash alone on Unix, and a name must give the same file wherever the directory is read.
-        string fileName = keyName.Replace('/', '_').Replace('\\', '_');
-        foreach (char invalid in Path.GetInvalidFileNameChars())
+        char[] characters = keyName.ToCharArray();
+        for (int index = 0; index < characters.Length; index++)
         {
-            fileName = fileName.Replace(invalid, '_');
+            char character = characters[index];
+            if (char.IsControl(character) || ReplacedCharacters.Contains(character))
+            {
+                characters[index] = '_';
+            }
         }
 
-        return Path.Combine(RootPath, fileName + KeyFileExtension);
+        return Path.Combine(RootPath, new string(characters) + KeyFileExtension);
     }
 }
