@@ -65,7 +65,7 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
             key.Dispose();
             return Task.FromResult(DeviceKeyResult<DeviceKeyInfo>.Failure(DeviceKeyErrorCategory.AlreadyExists, $"A key '{id.Alias}' already exists in scope '{id.Scope}'."));
         }
-        return Task.FromResult(DeviceKeyResult<DeviceKeyInfo>.Success(info));
+        return Task.FromResult(DeviceKeyResult<DeviceKeyInfo>.Success(CopyOf(info)));
     }
 
     /// <inheritdoc />
@@ -101,7 +101,7 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
             return Task.FromResult(refused);
         }
         return Task.FromResult(_keys.TryGetValue(id, out Entry? entry)
-            ? DeviceKeyResult<DeviceKeyInfo>.Success(entry.Info)
+            ? DeviceKeyResult<DeviceKeyInfo>.Success(CopyOf(entry.Info))
             : DeviceKeyRequests.NotFound<DeviceKeyInfo>(id));
     }
 
@@ -118,6 +118,7 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
             .Where(info => info.Id.Scope.Equals(scope, StringComparison.Ordinal))
             .OrderBy(info => info.CreatedUtc)
             .ThenBy(info => info.Id.Alias, StringComparer.Ordinal)
+            .Select(CopyOf)
             .ToList();
         return Task.FromResult(DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>>.Success(keys));
     }
@@ -154,4 +155,22 @@ public sealed class InMemoryDeviceKeyStore : IDeviceKeyStore, IDisposable
     }
 
     private sealed record Entry(ECDsa Key, DeviceKeyInfo Info);
+
+    /// <summary>
+    /// A copy of a stored description, so a caller that changes the returned <see cref="DeviceKeyInfo.PublicKeySpki"/>
+    /// bytes can't change what the store reports to the next caller.
+    /// </summary>
+    private static DeviceKeyInfo CopyOf(DeviceKeyInfo info)
+    {
+        return new DeviceKeyInfo
+        {
+            Id = info.Id,
+            PublicKeySpki = (byte[])info.PublicKeySpki.Clone(),
+            Fingerprint = info.Fingerprint,
+            CreatedUtc = info.CreatedUtc,
+            Protection = info.Protection,
+            Access = info.Access,
+            Attestation = info.Attestation,
+        };
+    }
 }

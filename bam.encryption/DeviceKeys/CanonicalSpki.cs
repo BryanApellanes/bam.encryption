@@ -19,7 +19,9 @@ public static class CanonicalSpki
     /// <summary>
     /// The longest input <see cref="Canonicalize"/> parses. The longest real P-256 encoding (explicit curve
     /// parameters with a seed) is about 335 bytes. The limit is checked before parsing, because BouncyCastle's parser
-    /// recurses once per nested element and deeply nested input would overflow the stack and end the process.
+    /// recurses once per nested element and deeply nested input would overflow the stack and end the process. At the
+    /// limit the worst nesting needs up to about 160 KB of stack, which .NET's default thread stacks (1 MB, and the
+    /// thread pool's) have; don't call this from a thread created with a smaller stack.
     /// </summary>
     public const int MaximumLength = 512;
 

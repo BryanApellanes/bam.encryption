@@ -739,6 +739,150 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
         DeleteQuietly(records);
     }
 
+    [UnitTest]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void ListEveryKeyOrFailWhileOtherProgramsUseTheTpm()
+    {
+        WindowsTpmDeviceKeyStore probe = new WindowsTpmDeviceKeyStore();
+        DeviceKeyCapabilities capabilities = probe.GetCapabilitiesAsync().GetAwaiter().GetResult();
+        Skip.Unless(capabilities.IsSupported, $"no usable TPM here: {capabilities.Reason}");
+
+        DirectoryInfo records = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "bam-devicekeys-" + Guid.NewGuid().ToString("N")));
+        When.A<WindowsTpmDeviceKeyStore>("lists and signs from 4 threads while 6 other processes sign with their own TPM keys",
+            () => new WindowsTpmDeviceKeyStore(records, TimeProvider.System),
+            (store) =>
+            {
+                string scope = "test." + DeviceKeyId.NewAlias();
+                List<DeviceKeyInfo> created = Enumerable.Range(0, 3)
+                    .Select(i => store.CreateAsync(new DeviceKeyCreateRequest { Scope = scope, Alias = "k" + i }).GetAwaiter().GetResult().Value!)
+                    .ToList();
+                List<System.Diagnostics.Process> noise = Enumerable.Range(0, 6).Select(_ => StartTpmNoise(TimeSpan.FromSeconds(12))).ToList();
+                try
+                {
+                    int complete = 0;
+                    int failed = 0;
+                    int shortLists = 0;
+                    int notSupported = 0;
+                    int thrown = 0;
+                    Task[] threads = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+                    {
+                        for (int i = 0; i < 10; i++)
+                        {
+                            try
+                            {
+                                DeviceKeyResult<IReadOnlyList<DeviceKeyInfo>> listed = store.ListAsync(scope).GetAwaiter().GetResult();
+                                if (listed.Succeeded)
+                                {
+                                    if (listed.Value!.Count == 3)
+                                    {
+                                        Interlocked.Increment(ref complete);
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref shortLists);
+                                    }
+                                }
+                                else if (listed.Error?.Category == DeviceKeyErrorCategory.PlatformFailure)
+                                {
+                                    Interlocked.Increment(ref failed);
+                                }
+                                else
+                                {
+                                    Interlocked.Increment(ref notSupported);
+                                }
+                                DeviceKeyResult<DeviceKeySignature> signed = store.SignAsync(created[i % 3].Id, new byte[] { 1, 2, 3 }).GetAwaiter().GetResult();
+                                if (signed.Error?.Category == DeviceKeyErrorCategory.NotSupported)
+                                {
+                                    Interlocked.Increment(ref notSupported);
+                                }
+                            }
+                            catch (Exception)
+                            {
+                                Interlocked.Increment(ref thrown);
+                            }
+                        }
+                    })).ToArray();
+                    Task.WaitAll(threads);
+                    return new LoadedListOutcome(complete, failed, shortLists, notSupported, thrown);
+                }
+                finally
+                {
+                    foreach (System.Diagnostics.Process process in noise)
+                    {
+                        if (!process.WaitForExit(30000))
+                        {
+                            process.Kill(true);
+                        }
+                        process.Dispose();
+                    }
+                    foreach (DeviceKeyInfo info in created)
+                    {
+                        store.DeleteAsync(info.Id).GetAwaiter().GetResult();
+                    }
+                }
+            })
+        .TheTest
+        .ShouldPass<LoadedListOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"no list succeeds with keys missing ({outcome.Short} did; {outcome.Complete} complete, {outcome.Failed} PlatformFailure)", outcome.Short == 0);
+            because.ItsTrue($"nothing is NotSupported ({outcome.NotSupported} were)", outcome.NotSupported == 0);
+            because.ItsTrue($"nothing throws ({outcome.Thrown} did)", outcome.Thrown == 0);
+            because.ItsTrue("at least some lists complete", outcome.Complete > 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+        DeleteQuietly(records);
+    }
+
+    [UnitTest]
+    public void ReturnCopiesSoACallerCannotChangeAStoredKey()
+    {
+        When.A<InMemoryDeviceKeyStore>("creates a key, scribbles on the returned public key, and reads it back",
+            () => new InMemoryDeviceKeyStore(),
+            (store) =>
+            {
+                DeviceKeyInfo created = store.CreateAsync(new DeviceKeyCreateRequest { Scope = Scope, MinimumProtection = DeviceKeyProtection.Software }).GetAwaiter().GetResult().Value!;
+                byte[] original = (byte[])created.PublicKeySpki.Clone();
+                created.PublicKeySpki[created.PublicKeySpki.Length - 1] ^= 0xFF;
+                DeviceKeyInfo got = store.GetAsync(created.Id).GetAwaiter().GetResult().Value!;
+                got.PublicKeySpki[0] ^= 0xFF;
+                DeviceKeyInfo listed = store.ListAsync(Scope).GetAwaiter().GetResult().Value!.Single();
+                return listed.PublicKeySpki.SequenceEqual(original) && store.GetAsync(created.Id).GetAwaiter().GetResult().Value!.PublicKeySpki.SequenceEqual(original);
+            })
+        .TheTest
+        .ShouldPass<bool>((because, _, unchanged) =>
+        {
+            because.ItsTrue("changing a returned key's bytes doesn't change the stored key", unchanged);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    /// <summary>
+    /// Starts a Windows PowerShell process that, outside bam's gate, signs in a loop with its own throwaway TPM key for
+    /// <paramref name="duration"/> and deletes the key when it finishes, the way another program would load the TPM.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static System.Diagnostics.Process StartTpmNoise(TimeSpan duration)
+    {
+        string name = "bam-test-noise-" + Guid.NewGuid().ToString("N");
+        string script = "$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.Core; "
+            + "$p=New-Object System.Security.Cryptography.CngKeyCreationParameters; $p.Provider=New-Object System.Security.Cryptography.CngProvider('Microsoft Platform Crypto Provider'); "
+            + $"$k=[System.Security.Cryptography.CngKey]::Create([System.Security.Cryptography.CngAlgorithm]::ECDsaP256,'{name}',$p); "
+            + "try { $e=New-Object System.Security.Cryptography.ECDsaCng($k); $d=[byte[]](1,2,3); "
+            + $"$end=(Get-Date).AddSeconds({(int)duration.TotalSeconds}); while((Get-Date) -lt $end) {{ try {{ $null=$e.SignData($d) }} catch {{ }} }} }} finally {{ $k.Delete() }}";
+        System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("-NoProfile");
+        start.ArgumentList.Add("-NonInteractive");
+        start.ArgumentList.Add("-Command");
+        start.ArgumentList.Add(script);
+        return System.Diagnostics.Process.Start(start)!;
+    }
+
     private static byte[] Nested(int length)
     {
         byte[] nested = new byte[length];
@@ -809,6 +953,8 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     private sealed record DisposedOutcome(bool GotSameKey, DeviceKeyErrorCategory? Missing, DeviceKeyErrorCategory? UndefinedAccess, DeviceKeyErrorCategory? UndefinedProtection, DeviceKeyErrorCategory? BadListScope, DeviceKeyErrorCategory? CreateAfter, DeviceKeyErrorCategory? SignAfter, DeviceKeyErrorCategory? GetAfter, DeviceKeyErrorCategory? ListAfter, bool SupportedAfter);
 
     private sealed record BadRecordOutcome(DeviceKeyErrorCategory? Duplicate, List<DeviceKeyErrorCategory?> Categories, bool ListSucceeded, int Listed, bool GoneRecordKept, DeviceKeyErrorCategory? GoneCategory, bool GoneDeleted, int TemporaryFiles);
+
+    private sealed record LoadedListOutcome(int Complete, int Failed, int Short, int NotSupported, int Thrown);
 
     private sealed record NestedOutcome(DeviceKeyErrorCategory? OverLimit, DeviceKeyErrorCategory? DeepNested, DeviceKeyErrorCategory? AtLimitNested, DeviceKeyErrorCategory? FingerprintNested);
 
