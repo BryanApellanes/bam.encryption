@@ -28,6 +28,14 @@ public static class TaggedPayload
     /// the audience, the actor key's fingerprint, the session id, both ephemeral public keys and the expiry.</summary>
     public const string SessionTranscript = "BAM-SESSION-TRANSCRIPT-1";
 
+    /// <summary>An account key chain entry (threeheadz-tracker#45, bam.protocol#103): account id, seq, prev, op and
+    /// its fields, then the signer, each as a <c>key:value</c> line.</summary>
+    public const string AccountKey = "BAM-ACCOUNT-KEY-1";
+
+    /// <summary>A signed profile projection (threeheadz-tracker#45): account id, domain, version, and the SHA-256 of the
+    /// projection.</summary>
+    public const string Profile = "BAM-PROFILE-1";
+
     /// <summary>The sealed-frame label (bam.protocol#118): the prefix of a frame's associated data and of its key
     /// derivation labels. Listed so no signed tag collides with it; it is never signed, so <see cref="Build"/>
     /// refuses it.</summary>
@@ -37,7 +45,7 @@ public static class TaggedPayload
     /// it. Device keys build it through bam.protocol, not here.</summary>
     public const string RequestProof = "BAM-REQUEST-PROOF-1";
 
-    private static readonly IReadOnlyList<string> SignedTags = Array.AsReadOnly(new[] { DeviceKey, DevicePair, DeviceRenew, SessionTranscript });
+    private static readonly IReadOnlyList<string> SignedTags = Array.AsReadOnly(new[] { DeviceKey, DevicePair, DeviceRenew, SessionTranscript, AccountKey, Profile });
 
     /// <summary>
     /// The tags <see cref="Build"/> accepts.

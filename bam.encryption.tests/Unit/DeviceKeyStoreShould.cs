@@ -177,6 +177,39 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     }
 
     [UnitTest]
+    public void BuildAccountKeyAndProfilePayloadsUnderTheSameRules()
+    {
+        When.A<string>("builds an account key entry and a profile payload, and bad ones of each",
+            "account",
+            (_) =>
+            {
+                string account = new string('a', 64);
+                byte[] entry = TaggedPayload.Build(TaggedPayload.AccountKey, "account:" + account, "seq:1", "prev:" + new string('b', 64), "op:unlink", "domain:" + new string('c', 64), "signer:" + account).Value!;
+                byte[] profile = TaggedPayload.Build(TaggedPayload.Profile, account, "www.whoiam.is", "3", new string('d', 64)).Value!;
+                return new AccountPayloadOutcome(
+                    Encoding.UTF8.GetString(entry),
+                    Encoding.UTF8.GetString(profile),
+                    TaggedPayload.Build(TaggedPayload.AccountKey, "account:" + account, "seq:1\nop:genesis").Error?.Category,
+                    TaggedPayload.Build(TaggedPayload.Profile, account, "www.whoiam.is\u0000", "3").Error?.Category,
+                    TaggedPayload.Tags.Contains(TaggedPayload.AccountKey) && TaggedPayload.Tags.Contains(TaggedPayload.Profile),
+                    TaggedPayload.Tags.Distinct(StringComparer.Ordinal).Count() == TaggedPayload.Tags.Count
+                        && !TaggedPayload.Tags.Contains(TaggedPayload.RequestProof) && !TaggedPayload.Tags.Contains(TaggedPayload.SealedFrame));
+            })
+        .TheTest
+        .ShouldPass<AccountPayloadOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("an account key entry is the tag, then one key:value line per field", outcome.Entry == "BAM-ACCOUNT-KEY-1\naccount:" + new string('a', 64) + "\nseq:1\nprev:" + new string('b', 64) + "\nop:unlink\ndomain:" + new string('c', 64) + "\nsigner:" + new string('a', 64));
+            because.ItsTrue("a profile payload is the tag, account id, domain, version and projection hash", outcome.Profile == "BAM-PROFILE-1\n" + new string('a', 64) + "\nwww.whoiam.is\n3\n" + new string('d', 64));
+            because.ItsTrue("a newline smuggled into an account key field is refused", outcome.EntryNewLine == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("a control character in a profile field is refused", outcome.ProfileControl == DeviceKeyErrorCategory.InvalidRequest);
+            because.ItsTrue("both tags are accepted", outcome.BothListed);
+            because.ItsTrue("the tags are distinct, and the unsigned labels stay out of the list", outcome.TagsDistinct);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
     public void BuildPayloadsByteForByteAndRefuseAmbiguousOnes()
     {
         When.A<string>("builds a pairing payload and some bad ones",
@@ -1118,6 +1151,8 @@ public class DeviceKeyStoreShould : UnitTestMenuContainer
     private sealed record RefusalOutcome(DeviceKeyErrorCategory? P384, DeviceKeyErrorCategory? Rsa, DeviceKeyErrorCategory? Garbage, DeviceKeyErrorCategory? Empty);
 
     private sealed record CategoryOutcome(DeviceKeyErrorCategory? Biometry, DeviceKeyErrorCategory? DefaultMinimum, DeviceKeyErrorCategory? StrongBox, DeviceKeyErrorCategory? Duplicate, DeviceKeyErrorCategory? BadScope, DeviceKeyErrorCategory? EmptyData, DeviceKeyErrorCategory? Cancel, bool FirstDelete, bool SecondDeleteIdempotent, DeviceKeyErrorCategory? AfterDelete);
+
+    private sealed record AccountPayloadOutcome(string Entry, string Profile, DeviceKeyErrorCategory? EntryNewLine, DeviceKeyErrorCategory? ProfileControl, bool BothListed, bool TagsDistinct);
 
     private sealed record PayloadOutcome(string Text, DeviceKeyErrorCategory? NewLine, DeviceKeyErrorCategory? Tab, DeviceKeyErrorCategory? RequestProof, DeviceKeyErrorCategory? Unknown, bool ChallengeMatches);
 
