@@ -133,6 +133,25 @@ string cipher = aliceKey.Encrypt("hello");
 string plaintext = bobKey.Decrypt(cipher); // "hello"
 ```
 
+### Session keys: one-use ECDH, HKDF and AES-256-GCM
+
+For new protocols (sealed frames, bam.protocol#116), use these instead of the `AesKey` / `EccPublicPrivateKeyPair` path above. That path uses the raw ECDH secret as an AES-CBC key (bam.encryption#3) and reuses one IV for every value it encrypts (#12).
+
+```csharp
+using Bam.Encryption;
+
+using EphemeralEcdh ours = EphemeralEcdh.Generate();          // send ours.PublicKeySpki to the peer
+EcdhAgreementResult agreed = ours.Agree(peerSpki);             // refuses non-canonical or invalid keys; agrees once
+using EcdhAgreement agreement = agreed.Agreement!;
+using AeadKey sending = agreement.DeriveAeadKey(transcriptHash, "BAM-SEALED-FRAME-1 client-to-server");
+
+SequenceNonce.TryCreate(FrameDirection.ClientToServer, sequence, out byte[] nonce);   // false at 2^20
+byte[] sealedFrame = sending.Seal(nonce, plaintext, associatedData);
+AeadOpenResult opened = receiving.Open(nonce, sealedFrame, associatedData);           // Opened, Tampered or Malformed
+```
+
+`AeadKey` doesn't track nonces: the caller owns one counter per key and direction. `KeyDerivation.Hkdf` is HKDF-SHA256 with a required salt and label.
+
 ### HMAC computation
 
 ```csharp

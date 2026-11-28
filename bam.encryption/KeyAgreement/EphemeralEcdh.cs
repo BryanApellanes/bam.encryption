@@ -11,32 +11,39 @@ namespace Bam.Encryption;
 /// through HKDF (<see cref="EcdhAgreement.DeriveKey(byte[], string, int)"/>).
 /// </summary>
 /// <remarks>
-/// The secret given to HKDF is the 32-byte X coordinate of the shared point, big-endian, with leading zero bytes
-/// kept (bam.protocol#118). This is a separate path from <c>EccPublicPrivateKeyPair</c>'s, which uses the raw secret
-/// as an AES key (bam.encryption#3).
+/// <para>The secret given to HKDF is the 32-byte X coordinate of the shared point, big-endian, with leading zero
+/// bytes kept (bam.protocol#118). This is a separate path from <c>EccPublicPrivateKeyPair</c>'s, which uses the raw
+/// secret as an AES key (bam.encryption#3).</para>
+/// <para>Safe to call from several threads: only one <see cref="Agree"/> can succeed. The private key is disposed as
+/// soon as it has agreed.</para>
 /// </remarks>
 public sealed class EphemeralEcdh : IDisposable
 {
     /// <summary>The shared secret's length in bytes.</summary>
     public const int SecretLength = 32;
 
+    private const int Unused = 0;
+    private const int Claimed = 1;
+    private const int Agreed = 2;
+
     private static readonly X9ECParameters P256 = ECNamedCurveTable.GetByOid(new Org.BouncyCastle.Asn1.DerObjectIdentifier(DeviceKeyAlgorithm.CurveOid));
 
-    private readonly ECDiffieHellman key;
-    private bool used;
-    private bool disposed;
+    private readonly ECDiffieHellman _key;
+    private readonly byte[] _publicKeySpki;
+    private int _state;
+    private int _disposed;
 
     private EphemeralEcdh(ECDiffieHellman key)
     {
-        this.key = key;
-        PublicKeySpki = key.ExportSubjectPublicKeyInfo();
+        _key = key;
+        _publicKeySpki = key.ExportSubjectPublicKeyInfo();
     }
 
     /// <summary>
     /// The public key, as DER SubjectPublicKeyInfo with the named curve and an uncompressed point
-    /// (<see cref="CanonicalSpki"/>'s form). Send this to the peer.
+    /// (<see cref="CanonicalSpki"/>'s form). Send this to the peer. Each read returns a new copy.
     /// </summary>
-    public byte[] PublicKeySpki { get; }
+    public byte[] PublicKeySpki => (byte[])_publicKeySpki.Clone();
 
     /// <summary>
     /// Generates a key pair.
@@ -51,6 +58,10 @@ public sealed class EphemeralEcdh : IDisposable
     /// Builds a key pair from a fixed private scalar, for known-answer tests only. A real session always uses
     /// <see cref="Generate"/>.
     /// </summary>
+    /// <remarks>
+    /// It's internal, but <c>bam.protocol.client</c> and <c>bam.protocol.server</c> can see this assembly's
+    /// internals (for their own known-answer tests). Neither may call it outside a test.
+    /// </remarks>
     /// <param name="privateScalar">The 32-byte big-endian scalar, from 1 to n - 1.</param>
     /// <returns>The key pair.</returns>
     /// <exception cref="ArgumentException">The scalar is not 32 bytes or is out of range.</exception>
@@ -89,30 +100,71 @@ public sealed class EphemeralEcdh : IDisposable
     /// Agrees a shared secret with a peer's public key. A key pair agrees once; a second call throws, so one
     /// ephemeral key never serves two sessions.
     /// </summary>
-    /// <param name="peerPublicKeySpki">The peer's P-256 public key as DER SubjectPublicKeyInfo, in any encoding
-    /// <see cref="CanonicalSpki.Canonicalize"/> accepts.</param>
-    /// <returns>The agreement, or why the peer's key was refused (not P-256, not a valid point, not a key at
-    /// all). A refusal does not use up the key pair.</returns>
-    /// <exception cref="InvalidOperationException">The key pair has already agreed.</exception>
+    /// <param name="peerPublicKeySpki">The peer's P-256 public key in exactly <see cref="CanonicalSpki"/>'s form:
+    /// DER SubjectPublicKeyInfo, named curve, uncompressed point (bam.protocol#118, Encodings). Any other encoding of
+    /// a valid key is refused, as bam.js and bam.py refuse it.</param>
+    /// <returns>The agreement, or why the peer's key was refused (not canonical, not P-256, not a point on the
+    /// curve, not a key at all). A refusal does not use up the key pair.</returns>
+    /// <exception cref="InvalidOperationException">The key pair has already agreed, or another thread is agreeing
+    /// with it.</exception>
     /// <exception cref="ObjectDisposedException">The key pair was disposed.</exception>
     public EcdhAgreementResult Agree(byte[] peerPublicKeySpki)
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
-        if (used)
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (Interlocked.CompareExchange(ref _state, Claimed, Unused) != Unused)
         {
             throw new InvalidOperationException("An ephemeral key agrees once; generate a new one for each session.");
         }
+        EcdhAgreementResult result;
+        try
+        {
+            result = AgreeClaimed(peerPublicKeySpki);
+        }
+        catch
+        {
+            Volatile.Write(ref _state, Unused);
+            throw;
+        }
+        if (!result.Succeeded)
+        {
+            Volatile.Write(ref _state, Unused);
+            return result;
+        }
+        Volatile.Write(ref _state, Agreed);
+        // The private key has done its one job; discard it now rather than when the caller disposes.
+        _key.Dispose();
+        return result;
+    }
+
+    /// <summary>
+    /// Releases the private key.
+    /// </summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _key.Dispose();
+        }
+    }
+
+    private EcdhAgreementResult AgreeClaimed(byte[] peerPublicKeySpki)
+    {
         DeviceKeyResult<byte[]> canonical = CanonicalSpki.Canonicalize(peerPublicKeySpki);
         if (!canonical.Succeeded || canonical.Value == null)
         {
             return EcdhAgreementResult.Refused(canonical.Error?.Message ?? "The peer's public key was refused.");
+        }
+        if (!canonical.Value.AsSpan().SequenceEqual(peerPublicKeySpki))
+        {
+            return EcdhAgreementResult.Refused("The peer's public key is not in canonical form (named curve, uncompressed point).");
         }
         byte[] secret;
         try
         {
             using ECDiffieHellman peer = ECDiffieHellman.Create();
             peer.ImportSubjectPublicKeyInfo(canonical.Value, out _);
-            secret = key.DeriveRawSecretAgreement(peer.PublicKey);
+            using ECDiffieHellmanPublicKey peerPublicKey = peer.PublicKey;
+            secret = _key.DeriveRawSecretAgreement(peerPublicKey);
         }
         catch (CryptographicException)
         {
@@ -123,20 +175,7 @@ public sealed class EphemeralEcdh : IDisposable
             CryptographicOperations.ZeroMemory(secret);
             return EcdhAgreementResult.Refused($"The platform returned a {secret.Length}-byte secret, not {SecretLength}.");
         }
-        used = true;
         return EcdhAgreementResult.Agreed(new EcdhAgreement(secret));
-    }
-
-    /// <summary>
-    /// Releases the private key.
-    /// </summary>
-    public void Dispose()
-    {
-        if (!disposed)
-        {
-            disposed = true;
-            key.Dispose();
-        }
     }
 }
 
@@ -146,16 +185,18 @@ public sealed class EphemeralEcdh : IDisposable
 /// </summary>
 public sealed class EcdhAgreement : IDisposable
 {
-    private readonly byte[] secret;
-    private bool disposed;
+    private readonly byte[] _secret;
+    private bool _disposed;
 
     internal EcdhAgreement(byte[] secret)
     {
-        this.secret = secret;
+        _secret = secret;
     }
 
     /// <summary>
     /// Derives key bytes from the secret with <see cref="KeyDerivation.Hkdf(ReadOnlySpan{byte}, ReadOnlySpan{byte}, string, int)"/>.
+    /// The bytes returned are key material: clear them (<see cref="CryptographicOperations.ZeroMemory"/>) once used,
+    /// or use <see cref="DeriveAeadKey"/>, which does.
     /// </summary>
     /// <param name="salt">The salt; not empty. Sealed frames use SHA-256 of the session transcript.</param>
     /// <param name="label">The purpose label, for example <c>BAM-SEALED-FRAME-1 client-to-server</c>.</param>
@@ -164,13 +205,13 @@ public sealed class EcdhAgreement : IDisposable
     /// <exception cref="ObjectDisposedException">The agreement was disposed.</exception>
     public byte[] DeriveKey(byte[] salt, string label, int length)
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(salt);
-        return KeyDerivation.Hkdf(secret, salt, label, length);
+        return KeyDerivation.Hkdf(_secret, salt, label, length);
     }
 
     /// <summary>
-    /// Derives an AES-256-GCM key from the secret.
+    /// Derives an AES-256-GCM key from the secret, clearing the intermediate key bytes.
     /// </summary>
     /// <param name="salt">The salt; not empty.</param>
     /// <param name="label">The purpose label.</param>
@@ -193,10 +234,10 @@ public sealed class EcdhAgreement : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (!disposed)
+        if (!_disposed)
         {
-            disposed = true;
-            CryptographicOperations.ZeroMemory(secret);
+            _disposed = true;
+            CryptographicOperations.ZeroMemory(_secret);
         }
     }
 }

@@ -4,6 +4,10 @@ using System.Text.Json;
 using Bam.Console;
 using Bam.Encryption.DeviceKeys;
 using Bam.Test;
+using Org.BouncyCastle.Asn1.X9;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.X509;
 
 namespace Bam.Encryption.Tests.Unit;
 
@@ -53,7 +57,7 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass<List<SessionCaseOutcome>>((because, _, outcomes) =>
         {
-            because.ItsTrue("there are two cases", outcomes.Count == 2);
+            because.ItsTrue("there are at least the two cases #118 started with", outcomes.Count >= 2);
             because.ItsTrue("one case's shared secret starts with a zero byte", outcomes.Any(outcome => outcome.SharedStartsWithZero));
             foreach (SessionCaseOutcome outcome in outcomes)
             {
@@ -271,6 +275,128 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
     }
 
     [UnitTest]
+    public void RefuseNonCanonicalAndOffCurvePeerKeys()
+    {
+        When.A<SessionVectors>("offers one key pair every non-canonical or invalid peer key, then a good one",
+            () => ReadVectors<SessionVectors>("sealed-session.json"),
+            (vectors) =>
+            {
+                using EphemeralEcdh ours = EphemeralEcdh.Generate();
+                using EphemeralEcdh peer = EphemeralEcdh.Generate();
+                byte[] good = peer.PublicKeySpki;
+                byte[] compressedVector = vectors.Refused.Single(refused => refused.Name == "a server key in compressed form").ServerPublicKey.FromBase64UrlEncoded();
+                ECPublicKeyParameters parameters = (ECPublicKeyParameters)PublicKeyFactory.CreateKey(good);
+                X9ECParameters curve = ECNamedCurveTable.GetByName("P-256");
+                byte[] explicitForm = SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(
+                    new ECPublicKeyParameters("EC", parameters.Q, new ECDomainParameters(curve.Curve, curve.G, curve.N, curve.H, curve.GetSeed()))).GetDerEncoded();
+                byte[] offCurve = (byte[])good.Clone();
+                offCurve[^1] ^= 1;
+                byte[] infinity = Convert.FromHexString("3019301306072a8648ce3d020106082a8648ce3d03010703020000");
+                byte[] truncated = good.AsSpan(0, good.Length - 1).ToArray();
+                List<EcdhAgreementResult> refusals = new List<EcdhAgreementResult>
+                {
+                    ours.Agree(compressedVector),
+                    ours.Agree(explicitForm),
+                    ours.Agree(offCurve),
+                    ours.Agree(infinity),
+                    ours.Agree(truncated),
+                };
+                byte[] mutated = peer.PublicKeySpki;
+                mutated[^1] ^= 1;
+                EcdhAgreementResult agreed = ours.Agree(good);
+                agreed.Agreement?.Dispose();
+                return new CanonicalOutcome(
+                    refusals.Select(result => result.Succeeded).ToList(),
+                    refusals.All(result => result.Agreement == null && result.Reason.Length > 0),
+                    refusals[0].Reason.Contains("canonical", StringComparison.Ordinal) && refusals[1].Reason.Contains("canonical", StringComparison.Ordinal),
+                    agreed.Succeeded,
+                    peer.PublicKeySpki.SequenceEqual(good));
+            })
+        .TheTest
+        .ShouldPass<CanonicalOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"the vector's compressed key, an explicit-parameters key, an off-curve point, the point at infinity and a truncated point are all refused ({string.Join(",", outcome.Refused)})", outcome.Refused.All(succeeded => !succeeded));
+            because.ItsTrue("each refusal says why and carries no agreement", outcome.RefusalsExplained);
+            because.ItsTrue("a valid key in another encoding is refused as not canonical", outcome.NonCanonicalNamed);
+            because.ItsTrue("the refusals leave the key pair usable", outcome.AgreedAfterRefusals);
+            because.ItsTrue("changing a returned public key does not change the key pair's", outcome.PublicKeyIsACopy);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void LetOnlyOneOfTwoRacingAgreesSucceed()
+    {
+        When.A<string>("races two agreements on one key pair, 200 times",
+            "race",
+            (_) =>
+            {
+                int bothSucceeded = 0;
+                int neitherSucceeded = 0;
+                for (int round = 0; round < 200; round++)
+                {
+                    using EphemeralEcdh ours = EphemeralEcdh.Generate();
+                    using EphemeralEcdh first = EphemeralEcdh.Generate();
+                    using EphemeralEcdh second = EphemeralEcdh.Generate();
+                    byte[] firstKey = first.PublicKeySpki;
+                    byte[] secondKey = second.PublicKeySpki;
+                    using Barrier barrier = new Barrier(2);
+                    Task<bool> a = Task.Run(() => TryAgree(ours, firstKey, barrier));
+                    Task<bool> b = Task.Run(() => TryAgree(ours, secondKey, barrier));
+                    int succeeded = (a.GetAwaiter().GetResult() ? 1 : 0) + (b.GetAwaiter().GetResult() ? 1 : 0);
+                    bothSucceeded += succeeded == 2 ? 1 : 0;
+                    neitherSucceeded += succeeded == 0 ? 1 : 0;
+                }
+                return new RaceOutcome(bothSucceeded, neitherSucceeded);
+            })
+        .TheTest
+        .ShouldPass<RaceOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"no round agreed twice ({outcome.BothSucceeded})", outcome.BothSucceeded == 0);
+            because.ItsTrue($"every round agreed once ({outcome.NeitherSucceeded} agreed none)", outcome.NeitherSucceeded == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void RefuseUseAfterDisposeAndListTheSessionTags()
+    {
+        When.A<string>("disposes each primitive and uses it, and checks the tag list",
+            "dispose",
+            (_) =>
+            {
+                AeadKey key = AeadKey.Generate();
+                SequenceNonce.TryCreate(FrameDirection.ClientToServer, 0, out byte[] nonce);
+                byte[] sealedData = key.Seal(nonce, new byte[] { 1 }, Array.Empty<byte>());
+                key.Dispose();
+                key.Dispose();
+                EphemeralEcdh pair = EphemeralEcdh.Generate();
+                using EphemeralEcdh peer = EphemeralEcdh.Generate();
+                pair.Dispose();
+                pair.Dispose();
+                return new DisposeOutcome(
+                    Throws<ObjectDisposedException>(() => key.Seal(nonce, new byte[] { 1 }, Array.Empty<byte>())),
+                    Throws<ObjectDisposedException>(() => key.Open(nonce, sealedData, Array.Empty<byte>())),
+                    Throws<ObjectDisposedException>(() => pair.Agree(peer.PublicKeySpki)),
+                    TaggedPayload.Tags.Contains(TaggedPayload.SessionTranscript),
+                    TaggedPayload.Build(TaggedPayload.SealedFrame, "x").Error?.Category);
+            })
+        .TheTest
+        .ShouldPass<DisposeOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue("a disposed AeadKey refuses to seal", outcome.SealAfterDispose);
+            because.ItsTrue("a disposed AeadKey refuses to open", outcome.OpenAfterDispose);
+            because.ItsTrue("a disposed key pair refuses to agree", outcome.AgreeAfterDispose);
+            because.ItsTrue("the session transcript tag can be built", outcome.TranscriptListed);
+            because.ItsTrue("the sealed-frame label is never built as a signed payload", outcome.SealedFrameRefused == DeviceKeyErrorCategory.InvalidRequest);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
     public void AgreeOnTheSameKeysFromBothEnds()
     {
         When.A<string>("runs a key agreement between two generated key pairs and passes a frame each way",
@@ -333,11 +459,34 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
         }
     }
 
+    private static bool TryAgree(EphemeralEcdh pair, byte[] peerKey, Barrier barrier)
+    {
+        barrier.SignalAndWait();
+        try
+        {
+            EcdhAgreementResult result = pair.Agree(peerKey);
+            result.Agreement?.Dispose();
+            return result.Succeeded;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static bool HexEquals(byte[] bytes, string hex) => Convert.ToHexString(bytes).Equals(hex, StringComparison.OrdinalIgnoreCase);
 
     private sealed record HkdfOutcome(string Case1, string Case2);
 
-    private sealed record SessionVectors(List<SessionVector> Cases);
+    private sealed record SessionVectors(List<SessionVector> Cases, List<RefusedSessionVector> Refused);
+
+    private sealed record RefusedSessionVector(string Name, string ServerPublicKey);
+
+    private sealed record CanonicalOutcome(List<bool> Refused, bool RefusalsExplained, bool NonCanonicalNamed, bool AgreedAfterRefusals, bool PublicKeyIsACopy);
+
+    private sealed record RaceOutcome(int BothSucceeded, int NeitherSucceeded);
+
+    private sealed record DisposeOutcome(bool SealAfterDispose, bool OpenAfterDispose, bool AgreeAfterDispose, bool TranscriptListed, DeviceKeyErrorCategory? SealedFrameRefused);
 
     private sealed record SessionVector(
         string Name,

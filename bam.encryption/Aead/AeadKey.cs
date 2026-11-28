@@ -25,8 +25,8 @@ public sealed class AeadKey : IDisposable
     /// <summary>The tag length in bytes, appended to the ciphertext.</summary>
     public const int TagLength = 16;
 
-    private readonly AesGcm aes;
-    private bool disposed;
+    private readonly AesGcm _aes;
+    private bool _disposed;
 
     /// <summary>
     /// Creates a key from its bytes. The bytes are copied; the caller still owns (and should clear) its copy.
@@ -40,7 +40,7 @@ public sealed class AeadKey : IDisposable
         {
             throw new ArgumentException($"An AES-256-GCM key is {KeyLength} bytes; {key.Length} were given.", nameof(key));
         }
-        aes = new AesGcm(key, TagLength);
+        _aes = new AesGcm(key, TagLength);
     }
 
     /// <summary>
@@ -71,13 +71,13 @@ public sealed class AeadKey : IDisposable
     /// <exception cref="ObjectDisposedException">The key was disposed.</exception>
     public byte[] Seal(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData)
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (nonce.Length != NonceLength)
         {
             throw new ArgumentException($"The nonce is {NonceLength} bytes; {nonce.Length} were given.", nameof(nonce));
         }
         byte[] sealedData = new byte[plaintext.Length + TagLength];
-        aes.Encrypt(nonce, plaintext, sealedData.AsSpan(0, plaintext.Length), sealedData.AsSpan(plaintext.Length), associatedData);
+        _aes.Encrypt(nonce, plaintext, sealedData.AsSpan(0, plaintext.Length), sealedData.AsSpan(plaintext.Length), associatedData);
         return sealedData;
     }
 
@@ -93,7 +93,7 @@ public sealed class AeadKey : IDisposable
     /// <exception cref="ObjectDisposedException">The key was disposed.</exception>
     public AeadOpenResult Open(ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> sealedData, ReadOnlySpan<byte> associatedData)
     {
-        ObjectDisposedException.ThrowIf(disposed, this);
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (nonce.Length != NonceLength)
         {
             return AeadOpenResult.Malformed($"The nonce is {nonce.Length} bytes, not {NonceLength}.");
@@ -106,7 +106,7 @@ public sealed class AeadKey : IDisposable
         byte[] plaintext = new byte[ciphertextLength];
         try
         {
-            aes.Decrypt(nonce, sealedData.Slice(0, ciphertextLength), sealedData.Slice(ciphertextLength), plaintext, associatedData);
+            _aes.Decrypt(nonce, sealedData.Slice(0, ciphertextLength), sealedData.Slice(ciphertextLength), plaintext, associatedData);
         }
         catch (AuthenticationTagMismatchException)
         {
@@ -122,10 +122,10 @@ public sealed class AeadKey : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (!disposed)
+        if (!_disposed)
         {
-            disposed = true;
-            aes.Dispose();
+            _disposed = true;
+            _aes.Dispose();
         }
     }
 }
