@@ -4,8 +4,8 @@ using System.Text;
 namespace Bam.Encryption.DeviceKeys;
 
 /// <summary>
-/// Builds the payloads device keys sign. A device key never signs bytes a server chose: it signs a payload it builds
-/// itself from fields it can show or check, beginning with a tag that names what the signature is for, so a
+/// Builds the payloads device keys and host keys sign. A key never signs bytes another party chose: it signs a
+/// payload built from fields it can show or check, beginning with a tag that names what the signature is for, so a
 /// signature for one purpose can never be replayed as another.
 /// </summary>
 /// <remarks>
@@ -24,16 +24,25 @@ public static class TaggedPayload
     /// <summary>Renewing a device link.</summary>
     public const string DeviceRenew = "BAM-DEVICE-RENEW-1";
 
+    /// <summary>A sealed-frame session's transcript (bam.protocol#118), which the host signs with its key. It names
+    /// the audience, the actor key's fingerprint, the session id, both ephemeral public keys and the expiry.</summary>
+    public const string SessionTranscript = "BAM-SESSION-TRANSCRIPT-1";
+
+    /// <summary>The sealed-frame label (bam.protocol#118): the prefix of a frame's associated data and of its key
+    /// derivation labels. Listed so no signed tag collides with it; it is never signed, so <see cref="Build"/>
+    /// refuses it.</summary>
+    public const string SealedFrame = "BAM-SEALED-FRAME-1";
+
     /// <summary>The per-request proof (bam.protocol's <c>CanonicalRequest</c>), listed so no device tag collides with
     /// it. Device keys build it through bam.protocol, not here.</summary>
     public const string RequestProof = "BAM-REQUEST-PROOF-1";
 
-    private static readonly IReadOnlyList<string> DeviceTags = Array.AsReadOnly(new[] { DeviceKey, DevicePair, DeviceRenew });
+    private static readonly IReadOnlyList<string> SignedTags = Array.AsReadOnly(new[] { DeviceKey, DevicePair, DeviceRenew, SessionTranscript });
 
     /// <summary>
     /// The tags <see cref="Build"/> accepts.
     /// </summary>
-    public static IReadOnlyList<string> Tags => DeviceTags;
+    public static IReadOnlyList<string> Tags => SignedTags;
 
     /// <summary>
     /// Builds a payload.
@@ -44,7 +53,7 @@ public static class TaggedPayload
     /// field, a field with a control character, or a field that is not valid UTF-16 (a lone surrogate).</returns>
     public static DeviceKeyResult<byte[]> Build(string tag, params string[] fields)
     {
-        if (tag == null || !DeviceTags.Contains(tag, StringComparer.Ordinal))
+        if (tag == null || !SignedTags.Contains(tag, StringComparer.Ordinal))
         {
             return DeviceKeyResult<byte[]>.Failure(DeviceKeyErrorCategory.InvalidRequest, $"Unknown payload tag '{tag}'.");
         }
