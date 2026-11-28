@@ -142,12 +142,22 @@ using Bam.Encryption;
 
 using EphemeralEcdh ours = EphemeralEcdh.Generate();          // send ours.PublicKeySpki to the peer
 EcdhAgreementResult agreed = ours.Agree(peerSpki);             // refuses non-canonical or invalid keys; agrees once
+if (!agreed.Succeeded)
+{
+    return Refuse(agreed.Reason);                              // the peer's key came from outside: refuse, don't throw
+}
 using EcdhAgreement agreement = agreed.Agreement!;
 using AeadKey sending = agreement.DeriveAeadKey(transcriptHash, "BAM-SEALED-FRAME-1 client-to-server");
+using AeadKey receiving = agreement.DeriveAeadKey(transcriptHash, "BAM-SEALED-FRAME-1 server-to-client");
 
-SequenceNonce.TryCreate(FrameDirection.ClientToServer, sequence, out byte[] nonce);   // false at 2^20
+if (!SequenceNonce.TryCreate(FrameDirection.ClientToServer, sequence, out byte[] nonce))   // false at 2^20
+{
+    return EndSession();
+}
 byte[] sealedFrame = sending.Seal(nonce, plaintext, associatedData);
-AeadOpenResult opened = receiving.Open(nonce, sealedFrame, associatedData);           // Opened, Tampered or Malformed
+
+// The peer's answer, sealed with the server-to-client key and its own nonce:
+AeadOpenResult opened = receiving.Open(answerNonce, answerFrame, answerAssociatedData);   // Opened, Tampered or Malformed
 ```
 
 `AeadKey` doesn't track nonces: the caller owns one counter per key and direction. `KeyDerivation.Hkdf` is HKDF-SHA256 with a required salt and label.

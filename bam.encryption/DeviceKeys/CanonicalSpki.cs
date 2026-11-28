@@ -27,7 +27,7 @@ public static class CanonicalSpki
 
     private static readonly DerObjectIdentifier P256Oid = new DerObjectIdentifier(DeviceKeyAlgorithm.CurveOid);
 
-    private static readonly X9ECParameters P256 = ECNamedCurveTable.GetByOid(P256Oid);
+    internal static readonly X9ECParameters P256 = ECNamedCurveTable.GetByOid(P256Oid);
 
     /// <summary>
     /// Returns the canonical form of a P-256 public key given as DER SubjectPublicKeyInfo in any encoding.

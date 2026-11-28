@@ -293,6 +293,8 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
                 offCurve[^1] ^= 1;
                 byte[] infinity = Convert.FromHexString("3019301306072a8648ce3d020106082a8648ce3d03010703020000");
                 byte[] truncated = good.AsSpan(0, good.Length - 1).ToArray();
+                // Well-formed DER whose point is 64 bytes, not 65: the outer and bit-string lengths are adjusted.
+                byte[] shortPoint = new byte[] { 0x30, 0x58 }.Concat(good.AsSpan(2, 21).ToArray()).Concat(new byte[] { 0x03, 0x41 }).Concat(good.AsSpan(25, good.Length - 26).ToArray()).ToArray();
                 List<EcdhAgreementResult> refusals = new List<EcdhAgreementResult>
                 {
                     ours.Agree(compressedVector),
@@ -300,6 +302,7 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
                     ours.Agree(offCurve),
                     ours.Agree(infinity),
                     ours.Agree(truncated),
+                    ours.Agree(shortPoint),
                 };
                 byte[] mutated = peer.PublicKeySpki;
                 mutated[^1] ^= 1;
@@ -315,7 +318,7 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
         .TheTest
         .ShouldPass<CanonicalOutcome>((because, _, outcome) =>
         {
-            because.ItsTrue($"the vector's compressed key, an explicit-parameters key, an off-curve point, the point at infinity and a truncated point are all refused ({string.Join(",", outcome.Refused)})", outcome.Refused.All(succeeded => !succeeded));
+            because.ItsTrue($"the vector's compressed key, an explicit-parameters key, an off-curve point, the point at infinity, truncated DER and a well-formed 64-byte point are all refused ({string.Join(",", outcome.Refused)})", outcome.Refused.Count == 6 && outcome.Refused.All(succeeded => !succeeded));
             because.ItsTrue("each refusal says why and carries no agreement", outcome.RefusalsExplained);
             because.ItsTrue("a valid key in another encoding is refused as not canonical", outcome.NonCanonicalNamed);
             because.ItsTrue("the refusals leave the key pair usable", outcome.AgreedAfterRefusals);
@@ -355,6 +358,132 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
         {
             because.ItsTrue($"no round agreed twice ({outcome.BothSucceeded})", outcome.BothSucceeded == 0);
             because.ItsTrue($"every round agreed once ({outcome.NeitherSucceeded} agreed none)", outcome.NeitherSucceeded == 0);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void NeverDeriveFromAClearedSecretWhenDisposeRaces()
+    {
+        When.A<string>("races DeriveKey against Dispose on one agreement, 2000 times",
+            "derive race",
+            (_) =>
+            {
+                byte[] salt = SHA256.HashData(Encoding.UTF8.GetBytes("transcript"));
+                byte[] zeroKey = KeyDerivation.Hkdf(new byte[EphemeralEcdh.SecretLength], salt, ClientToServerLabel, 32);
+                int real = 0;
+                int disposed = 0;
+                int wrong = 0;
+                for (int round = 0; round < 2000; round++)
+                {
+                    using EphemeralEcdh client = EphemeralEcdh.Generate();
+                    using EphemeralEcdh server = EphemeralEcdh.Generate();
+                    using EcdhAgreement reference = server.Agree(client.PublicKeySpki).Agreement!;
+                    byte[] expected = reference.DeriveKey(salt, ClientToServerLabel, 32);
+                    EcdhAgreement agreement = client.Agree(server.PublicKeySpki).Agreement!;
+                    using Barrier barrier = new Barrier(2);
+                    Task<byte[]?> derive = Task.Run(() =>
+                    {
+                        barrier.SignalAndWait();
+                        try
+                        {
+                            return agreement.DeriveKey(salt, ClientToServerLabel, 32);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            return null;
+                        }
+                    });
+                    Task dispose = Task.Run(() =>
+                    {
+                        barrier.SignalAndWait();
+                        agreement.Dispose();
+                    });
+                    byte[]? derived = derive.GetAwaiter().GetResult();
+                    dispose.GetAwaiter().GetResult();
+                    if (derived == null)
+                    {
+                        disposed++;
+                    }
+                    else if (derived.SequenceEqual(expected))
+                    {
+                        real++;
+                    }
+                    else
+                    {
+                        wrong++;
+                    }
+                    if (derived != null && derived.SequenceEqual(zeroKey))
+                    {
+                        wrong++;
+                    }
+                }
+                return new DeriveRaceOutcome(real, disposed, wrong);
+            })
+        .TheTest
+        .ShouldPass<DeriveRaceOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"every derivation gave the real key or ObjectDisposedException ({outcome.Real} real, {outcome.Disposed} disposed, {outcome.Wrong} wrong)", outcome.Wrong == 0);
+            because.ItsTrue("all 2000 rounds ended one of those two ways", outcome.Real + outcome.Disposed == 2000);
+        })
+        .SoBeHappy()
+        .UnlessItFailed();
+    }
+
+    [UnitTest]
+    public void GiveTheClaimBackWhenAgreeRacesDispose()
+    {
+        When.A<string>("races Agree against Dispose on one key pair, 500 times",
+            "agree race",
+            (_) =>
+            {
+                int unexpected = 0;
+                int succeededOrDisposed = 0;
+                for (int round = 0; round < 500; round++)
+                {
+                    EphemeralEcdh ours = EphemeralEcdh.Generate();
+                    using EphemeralEcdh peer = EphemeralEcdh.Generate();
+                    byte[] peerKey = peer.PublicKeySpki;
+                    using Barrier barrier = new Barrier(2);
+                    Task<string> agree = Task.Run(() =>
+                    {
+                        barrier.SignalAndWait();
+                        try
+                        {
+                            EcdhAgreementResult result = ours.Agree(peerKey);
+                            result.Agreement?.Dispose();
+                            return result.Succeeded ? "agreed" : "refused:" + result.Reason;
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            return "disposed";
+                        }
+                    });
+                    Task dispose = Task.Run(() =>
+                    {
+                        barrier.SignalAndWait();
+                        ours.Dispose();
+                    });
+                    string outcome = agree.GetAwaiter().GetResult();
+                    dispose.GetAwaiter().GetResult();
+                    // Whatever happened, a disposed pair must say so rather than claim to be in use.
+                    bool disposedAfterwards = Throws<ObjectDisposedException>(() => ours.Agree(peerKey));
+                    if ((outcome == "agreed" || outcome == "disposed" || outcome.StartsWith("refused:", StringComparison.Ordinal)) && disposedAfterwards)
+                    {
+                        succeededOrDisposed++;
+                    }
+                    else
+                    {
+                        unexpected++;
+                    }
+                }
+                return new AgreeRaceOutcome(succeededOrDisposed, unexpected);
+            })
+        .TheTest
+        .ShouldPass<AgreeRaceOutcome>((because, _, outcome) =>
+        {
+            because.ItsTrue($"each race ended in an agreement, a refusal or ObjectDisposedException, and the pair then reported itself disposed ({outcome.Unexpected} unexpected)", outcome.Unexpected == 0 && outcome.Expected == 500);
         })
         .SoBeHappy()
         .UnlessItFailed();
@@ -485,6 +614,10 @@ public class SessionPrimitivesShould : UnitTestMenuContainer
     private sealed record CanonicalOutcome(List<bool> Refused, bool RefusalsExplained, bool NonCanonicalNamed, bool AgreedAfterRefusals, bool PublicKeyIsACopy);
 
     private sealed record RaceOutcome(int BothSucceeded, int NeitherSucceeded);
+
+    private sealed record DeriveRaceOutcome(int Real, int Disposed, int Wrong);
+
+    private sealed record AgreeRaceOutcome(int Expected, int Unexpected);
 
     private sealed record DisposeOutcome(bool SealAfterDispose, bool OpenAfterDispose, bool AgreeAfterDispose, bool TranscriptListed, DeviceKeyErrorCategory? SealedFrameRefused);
 

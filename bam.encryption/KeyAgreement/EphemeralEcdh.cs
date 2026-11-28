@@ -26,7 +26,7 @@ public sealed class EphemeralEcdh : IDisposable
     private const int Claimed = 1;
     private const int Agreed = 2;
 
-    private static readonly X9ECParameters P256 = ECNamedCurveTable.GetByOid(new Org.BouncyCastle.Asn1.DerObjectIdentifier(DeviceKeyAlgorithm.CurveOid));
+    private static X9ECParameters P256 => CanonicalSpki.P256;
 
     private readonly ECDiffieHellman _key;
     private readonly byte[] _publicKeySpki;
@@ -88,6 +88,11 @@ public sealed class EphemeralEcdh : IDisposable
         try
         {
             key.ImportParameters(parameters);
+        }
+        catch
+        {
+            key.Dispose();
+            throw;
         }
         finally
         {
@@ -166,9 +171,10 @@ public sealed class EphemeralEcdh : IDisposable
             using ECDiffieHellmanPublicKey peerPublicKey = peer.PublicKey;
             secret = _key.DeriveRawSecretAgreement(peerPublicKey);
         }
-        catch (CryptographicException)
+        catch (CryptographicException exception)
         {
-            return EcdhAgreementResult.Refused("The peer's public key is not a valid P-256 point.");
+            // CanonicalSpki has already validated the point, so a failure here is the platform refusing the key.
+            return EcdhAgreementResult.Refused($"The platform refused the peer's public key: {exception.Message}");
         }
         if (secret.Length != SecretLength)
         {
@@ -183,8 +189,13 @@ public sealed class EphemeralEcdh : IDisposable
 /// A shared secret from <see cref="EphemeralEcdh.Agree"/>. The secret can only be passed to HKDF. Dispose it once
 /// the session's keys are derived; that clears it.
 /// </summary>
+/// <remarks>
+/// Safe to use from several threads. A derivation and <see cref="Dispose"/> never overlap: a derivation either
+/// finishes with the real secret or throws <see cref="ObjectDisposedException"/>, and never reads a cleared one.
+/// </remarks>
 public sealed class EcdhAgreement : IDisposable
 {
+    private readonly object _lock = new object();
     private readonly byte[] _secret;
     private bool _disposed;
 
@@ -205,9 +216,12 @@ public sealed class EcdhAgreement : IDisposable
     /// <exception cref="ObjectDisposedException">The agreement was disposed.</exception>
     public byte[] DeriveKey(byte[] salt, string label, int length)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(salt);
-        return KeyDerivation.Hkdf(_secret, salt, label, length);
+        lock (_lock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return KeyDerivation.Hkdf(_secret, salt, label, length);
+        }
     }
 
     /// <summary>
@@ -234,10 +248,13 @@ public sealed class EcdhAgreement : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (!_disposed)
+        lock (_lock)
         {
-            _disposed = true;
-            CryptographicOperations.ZeroMemory(_secret);
+            if (!_disposed)
+            {
+                _disposed = true;
+                CryptographicOperations.ZeroMemory(_secret);
+            }
         }
     }
 }
